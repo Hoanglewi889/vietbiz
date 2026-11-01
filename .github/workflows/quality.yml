@@ -1,0 +1,97 @@
+name: VietBiz Quality Gate
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      VIETBIZ_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt pytest-cov
+      - name: Run API tests with JUnit and coverage artifacts
+        run: python -m pytest -q --junitxml=pytest-results.xml --cov=app --cov-report=xml:coverage.xml
+      - name: Dependency audit
+        run: python -m pip_audit -r requirements.txt
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vietbiz-api-quality
+          path: |
+            services/api/pytest-results.xml
+            services/api/coverage.xml
+          if-no-files-found: warn
+  postgres-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vietbiz
+          POSTGRES_PASSWORD: ci-only-disposable
+          POSTGRES_DB: vietbiz_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vietbiz -d vietbiz_test"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    defaults:
+      run:
+        working-directory: services/api
+    env:
+      VIETBIZ_ENV: test
+      VIETBIZ_AUTH_MODE: demo
+      VIETBIZ_TEST_DATABASE_URL: postgresql+psycopg://vietbiz:ci-only-disposable@localhost:5432/vietbiz_test
+      PGPASSWORD: ci-only-disposable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q --junitxml=postgres-results.xml
+      - name: PostgreSQL backup and restore rehearsal
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16
+          /usr/lib/postgresql/16/bin/pg_dump -h localhost -U vietbiz -d vietbiz_test -Fc -f /tmp/vietbiz.dump
+          /usr/lib/postgresql/16/bin/createdb -h localhost -U vietbiz vietbiz_restore
+          /usr/lib/postgresql/16/bin/pg_restore -h localhost -U vietbiz -d vietbiz_restore --exit-on-error /tmp/vietbiz.dump
+          python scripts/verify_restore.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vietbiz-postgres-quality
+          path: services/api/postgres-results.xml
+  ui-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r services/api/requirements.txt
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run isolated Chromium workflow checks
+        run: npm run test:ui

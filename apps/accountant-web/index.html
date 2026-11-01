@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VietBiz · Công việc kế toán</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="i18n.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="VietBiz"
+        ><span class="brand-mark">V</span>vietbiz<span class="brand-dot"
+          >.</span
+        ></a
+      ><span class="top-caption" data-i18n="product"></span
+      ><label class="language"
+        ><span data-i18n="language"></span
+        ><select id="language">
+          <option value="vi">Tiếng Việt</option>
+          <option value="cs">Čeština</option>
+        </select></label
+      >
+    </header>
+    <div class="demo-banner">
+      <span class="dot"></span><span data-i18n="demoNotice"></span
+      ><span class="sprint">SPRINT 10</span>
+    </div>
+    <main id="workspace">
+      <section class="intro">
+        <div>
+          <p class="eyebrow" data-i18n="eyebrow"></p>
+          <h1 data-i18n="headline"></h1>
+          <p class="muted" data-i18n="subhead"></p>
+        </div>
+        <button id="demo" class="primary" data-i18n="demo"></button>
+      </section>
+      <section class="connection panel" aria-label="Connection">
+        <details class="advanced-connection">
+          <summary data-i18n="advanced"></summary>
+          <form id="connect-form">
+            <label
+              ><span data-i18n="api"></span
+              ><input
+                id="api"
+                type="url"
+                required
+                value="http://127.0.0.1:8000" /></label
+            ><label
+              ><span data-i18n="identity"></span
+              ><input id="user" autocomplete="off" required /></label
+            ><button
+              type="submit"
+              class="secondary"
+              data-i18n="connect"
+            ></button>
+          </form>
+        </details>
+        <div class="context">
+          <label id="demo-role-label" hidden
+            ><span data-i18n="demoRole"></span
+            ><select id="demo-role"></select></label
+          ><label class="company"
+            ><span data-i18n="company"></span
+            ><select id="org" disabled>
+              <option
+                value=""
+                data-i18n="chooseCompany"
+              ></option></select></label
+          ><span id="role-badge" class="badge neutral"></span>
+        </div>
+      </section>
+      <div id="notice" role="status" aria-live="polite" hidden></div>
+      <section class="metrics" aria-label="Summary">
+        <div class="metric">
+          <span data-i18n="active"></span><strong id="metric-active">—</strong
+          ><small data-i18n="activeHint"></small>
+        </div>
+        <div class="metric">
+          <span data-i18n="waiting"></span><strong id="metric-waiting">—</strong
+          ><small data-i18n="waitingHint"></small>
+        </div>
+        <div class="metric">
+          <span data-i18n="overdue"></span><strong id="metric-overdue">—</strong
+          ><small data-i18n="overdueHint"></small>
+        </div>
+        <div class="metric">
+          <span data-i18n="complete"></span><strong id="metric-done">—</strong
+          ><small data-i18n="completeHint"></small>
+        </div>
+      </section>
+      <div class="workspace-tabs">
+        <button id="tasks-tab" class="tab active" data-i18n="tasks"></button
+        ><button id="docs-tab" class="tab" data-i18n="documents"></button
+        ><span class="tab-note" data-i18n="scopeNote"></span>
+      </div>
+      <section id="tasks-view">
+        <div class="task-layout">
+          <section class="panel task-list-panel">
+            <div class="section-heading">
+              <h2 data-i18n="taskList"></h2>
+              <button
+                id="new-task"
+                class="secondary"
+                disabled
+                data-i18n="newTask"
+              ></button>
+            </div>
+            <div class="filters">
+              <label
+                ><span class="sr-only" data-i18n="filter"></span
+                ><select id="status-filter">
+                  <option
+                    value=""
+                    data-i18n="allStatuses"
+                  ></option></select></label
+              ><label class="check"
+                ><input id="overdue-filter" type="checkbox" /><span
+                  data-i18n="onlyOverdue"
+                ></span></label
+              ><button
+                id="refresh"
+                class="icon-button"
+                data-i18n="refresh"
+              ></button>
+            </div>
+            <div id="task-list" class="task-list" aria-live="polite"></div>
+            <button
+              id="more-tasks"
+              class="more"
+              hidden
+              data-i18n="more"
+            ></button>
+          </section>
+          <section
+            class="panel detail-panel"
+            id="detail-panel"
+            aria-live="polite"
+          ></section>
+        </div>
+      </section>
+      <section id="docs-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="documents"></h2>
+            <p class="muted" data-i18n="documentHint"></p>
+          </div>
+        </div>
+        <form id="upload-form">
+          <label
+            ><span data-i18n="chooseFile"></span
+            ><input
+              id="upload-file"
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              required /></label
+          ><button
+            id="upload-button"
+            class="primary"
+            disabled
+            data-i18n="upload"
+          ></button>
+        </form>
+        <div id="document-list" class="document-list"></div>
+      </section>
+      <footer>
+        <span>VietBiz · 2026</span><span data-i18n="footer"></span>
+      </footer>
+    </main>
+    <dialog id="create-dialog" aria-labelledby="create-title">
+      <form id="create-form">
+        <div class="section-heading">
+          <h2 id="create-title" data-i18n="newTaskTitle"></h2>
+          <button
+            type="button"
+            id="close-dialog"
+            class="icon-button"
+            data-i18n="close"
+          ></button>
+        </div>
+        <label
+          ><span data-i18n="title"></span
+          ><input id="task-title" maxlength="180" required
+        /></label>
+        <label
+          ><span data-i18n="description"></span
+          ><textarea id="task-description" rows="4" maxlength="4000"></textarea>
+        </label>
+        <label
+          ><span data-i18n="linkedDocument"></span
+          ><select id="task-document">
+            <option value="" data-i18n="noDocument"></option></select
+        ></label>
+        <div class="form-row">
+          <label
+            ><span data-i18n="dueDate"></span
+            ><input id="task-due" type="date" /></label
+          ><label
+            ><span data-i18n="priority"></span
+            ><select id="task-priority">
+              <option value="normal" data-i18n="normal"></option>
+              <option value="high" data-i18n="high"></option></select
+          ></label>
+        </div>
+        <p class="muted" data-i18n="sharedNotice"></p>
+        <p id="create-error" class="inline-error" role="alert"></p>
+        <button
+          id="create-submit"
+          class="primary"
+          type="submit"
+          data-i18n="create"
+        ></button>
+      </form>
+    </dialog>
+  </body>
+</html>

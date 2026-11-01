@@ -1,0 +1,11 @@
+{
+  "name": "vietbiz-local-workspace",
+  "private": true,
+  "version": "0.10.0",
+  "scripts": {
+    "test:ui": "node scripts/run-ui-tests.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

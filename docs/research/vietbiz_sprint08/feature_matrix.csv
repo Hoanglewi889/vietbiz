@@ -1,0 +1,8 @@
+feature,Fakturoid,iDoklad,POHODA,Money S3,ABRA Flexi,VietBiz priority,verification notes
+Invoice workflow,Research pending,Research pending,Research pending,API supports invoices,Research pending,P0,Money S3 vendor API docs
+Document intake/OCR,Research pending,Research pending,Research pending,Research pending,Research pending,P0,Needs hands-on test
+Inventory,Research pending,Research pending,Research pending,API supports inventory entities,Research pending,P1,Money S3 vendor API docs
+Accounting export,Research pending,Research pending,XML interface documented,API documented,Research pending,P0,Confirm exact formats and versions
+Accountant collaboration,Research pending,Research pending,Research pending,Research pending,Research pending,P0,Requires demos
+Vietnamese-Czech UX,Research pending,Research pending,Research pending,Research pending,Research pending,P0,No absence claims before verification
+Legal compliance calendar,Research pending,Research pending,Research pending,Research pending,Research pending,P1,Official legislation sources required

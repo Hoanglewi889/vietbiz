@@ -1,0 +1,233 @@
+Captured visible response from Claude web, 2026-10-31. Review input, not proof of executed tests.
+
+Dùng phím mũi tên lên và xuống để di chuyển giữa các tin nhắn.
+
+Văn bản đã dán.txt
+Văn bản đã dán.txt
+TXT
+3 phút trước
+
+
+
+Claude đã phản hồi: Review VietBiz Sprint07: quyền truy cập và tính nguyên tử (documents + invitations)
+Đang rà soát cách một lỗi tải tệp được xử lý
+
+Đang rà soát cách một lỗi tải tệp được xử lý
+Review VietBiz Sprint07: quyền truy cập và tính nguyên tử (documents + invitations)
+
+Đây là review tĩnh trên mã nguồn được dán vào. Tôi không chạy test và không sửa file nào. Số dòng trong diff là ước lượng vì tôi không có repo, nên Codex cần áp patch theo ngữ cảnh hàm.
+
+Kết luận nhanh
+Invitations (accept, revoke, invite): không thấy lỗi nguyên tử. Các hàm này đã dùng UPDATE … WHERE status='pending' AND revoked_at IS NULL rồi kiểm tra rowcount. Partial unique index chặn trường hợp hai lời mời cùng pending. Mọi HTTPException bên trong with conn() đều làm transaction rollback, kể cả khi authorize(inviter) thất bại sau bước claim. Không nên sửa phần này.
+Documents: có 1 lỗi nghiêm trọng (race khi review) và 2 lỗi nhỏ hơn, mô tả bên dưới.
+Lỗi 1 — HIGH: race approve/reject trong review()
+
+Vị trí: services/api/app/main.py, hàm review().
+
+Bằng chứng: hàm đọc SELECT status rồi kiểm tra != 'needs_review' trong Python. Sau đó lệnh UPDATE documents SET status=? WHERE id=? chạy không có điều kiện status.
+
+Trên SQLite (pysqlite qua SQLAlchemy): BEGIN chỉ được phát ra trước câu DML đầu tiên, nên SELECT không giữ lock. Hai request cùng đọc thấy needs_review. Cả hai cùng UPDATE và commit lần lượt.
+Trên PostgreSQL READ COMMITTED: request B bị chặn ở UPDATE. Khi A commit, B đánh giá lại WHERE id=?, điều kiện vẫn đúng, nên B ghi đè kết quả của A.
+
+Hậu quả:
+
+Cả hai request đều nhận 200.
+Trạng thái cuối là của request đến sau, ví dụ approve bị ghi đè thành reject.
+Audit log có hai sự kiện mâu thuẫn nhau (document.approved và document.rejected).
+
+Với chứng từ kế toán, đây là lỗi toàn vẹn dữ liệu. UPDATE cũng thiếu organization_id. Hiện tại chưa khai thác được vì SELECT đã lọc theo org, nhưng nên thêm để phòng thủ nhiều lớp.
+
+Patch (cùng pattern với accept_invitation; chuỗi SQL không chứa ? literal nên tương thích Transaction.execute):
+
+
+diff
+--- a/services/api/app/main.py
++++ b/services/api/app/main.py
+@@ def review(org_id:str,doc_id:str,body:ReviewRequest,uid:str=Depends(current_user)):
+     with conn() as c:
+         authorize(c,uid,org_id,('accountant','owner'))
+-        d=c.execute('SELECT status FROM documents WHERE id=? AND organization_id=?',(doc_id,org_id)).fetchone()
+-        if not d:raise HTTPException(404,'Document not found')
+-        if d['status']!='needs_review':raise HTTPException(409,'Document already processed')
+         new={'approve':'approved','reject':'rejected','request_changes':'needs_changes'}[body.decision]
+-        c.execute('UPDATE documents SET status=? WHERE id=?',(new,doc_id))
++        # Conditional UPDATE claims the document exactly once (same pattern as accept_invitation).
++        claimed=c.execute("UPDATE documents SET status=? WHERE id=? AND organization_id=? AND status='needs_review'",
++                          (new,doc_id,org_id))
++        if claimed.rowcount!=1:
++            if not c.execute('SELECT 1 FROM documents WHERE id=? AND organization_id=?',(doc_id,org_id)).fetchone():
++                raise HTTPException(404,'Document not found')
++            raise HTTPException(409,'Document already processed')
+         event(c,org_id,uid,'document.'+new,doc_id)
+     return {'id':doc_id,'status':new}
+
+Patch giữ nguyên status code (404/409), message và response. Không có thay đổi UI.
+
+Lỗi 2 — MEDIUM/LOW: original() ghi audit trước khi xác thực file
+
+Vị trí: services/api/app/main.py, hàm original().
+
+Bằng chứng: sự kiện document.downloaded được commit trước khi FileResponse kiểm tra file. FileResponse chỉ stat file khi gửi response. Nếu file gốc mất, ví dụ do khôi phục backup thiếu thư mục originals/:
+
+Client nhận 500 (RuntimeError).
+Audit vẫn ghi là đã tải xuống.
+
+Ngoài ra, storage_path lấy từ DB được dùng thẳng mà không giới hạn trong FILES/<org_id>. Hiện tại chưa khai thác được vì path do server tạo ra. Đây là biện pháp phòng thủ nhiều lớp cho trường hợp DB bị sửa hoặc migrate sai.
+
+Patch:
+
+
+diff
+@@ def original(org_id:str,doc_id:str,uid:str=Depends(current_user)):
+     with conn() as c:
+         authorize(c,uid,org_id)
+         d=c.execute('SELECT * FROM documents WHERE id=? AND organization_id=?',(doc_id,org_id)).fetchone()
+         if not d:raise HTTPException(404,'Document not found')
++        path=Path(d['storage_path']).resolve()
++        if not path.is_relative_to((FILES / org_id).resolve()) or not path.is_file():
++            raise HTTPException(404,'Original file missing')
+         event(c,org_id,uid,'document.downloaded',doc_id)
+-    return FileResponse(d['storage_path'],media_type=d['mime'],filename=d['filename'])
++    return FileResponse(path,media_type=d['mime'],filename=d['filename'])
+
+is_relative_to cần Python 3.9 trở lên. Còn một race nhỏ: file có thể bị xóa sau is_file(). Trường hợp này chấp nhận được với prototype.
+
+Lỗi 3 — LOW (một phần là giả định rủi ro): upload_document() không nguyên tử giữa authorize và insert
+
+Bằng chứng:
+
+authorize() chạy trong transaction thứ nhất.
+File được ghi xuống đĩa ở ngoài transaction.
+INSERT documents chạy trong transaction thứ hai, không kiểm tra lại quyền.
+
+Mức độ thực tế:
+
+Race quyền là giả định: hiện chưa có endpoint xóa member hay đổi role, nên chưa khai thác được. Nó sẽ thành lỗi thật ngay khi có endpoint đó.
+File mồ côi là thật nhưng nhẹ: nếu process chết giữa write_bytes và commit, file còn lại trên đĩa mà không có bản ghi DB.
+
+Patch tối thiểu (một dòng):
+
+
+diff
+@@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(current_user)):
+     try:
+       with conn() as c:
++        authorize(c,uid,org_id,('owner','employee'))
+         c.execute('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),sha256(content).hexdigest(),len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
+
+Ghi chú ngoài phạm vi, chỉ là giả định và không sửa ở đây:
+
+Giới hạn kích thước upload: Starlette đã parse toàn bộ multipart (spool ra đĩa) trước khi handler chạy. Vì vậy giới hạn 10 MB không chặn được dung lượng nhận vào.
+Phân tách nhiệm vụ: owner có thể tự duyệt chứng từ do chính mình upload. Cần PO xác nhận đây có phải yêu cầu “four-eyes” hay không.
+Test hồi quy
+
+Test giả định có fixture client đang ở demo mode với DB đã migrate tạm. Codex cần đổi cho khớp conftest.py hiện có. Test race dùng threading.Barrier chặn ngay trước UPDATE documents, nên thứ tự xen kẽ giữa hai request là xác định, không phụ thuộc may rủi:
+
+Code cũ: cả hai request đã qua bước SELECT, nên kết quả là [200, 200] và test fail.
+Code mới: request sau nhận 0 rows, nên kết quả là [200, 409].
+
+python
+# services/api/tests/test_document_review_atomicity.py
+import threading
+from contextlib import contextmanager
+from fastapi.testclient import TestClient
+from app import main
+
+PDF = b'%PDF-1.4\n%%EOF\n'
+REVIEW_EVENTS = {'document.approved', 'document.rejected', 'document.needs_changes'}
+
+
+def _org_with_doc(client):
+    owner = client.post('/dev/users', params={'display_name': 'Owner'}).json()['id']
+    h = {'X-User': owner}
+    org = client.post('/v1/organizations', json={'name': 'Race s.r.o.'}, headers=h).json()['id']
+    r = client.post(f'/v1/organizations/{org}/documents', headers=h,
+                    files={'file': ('a.pdf', PDF, 'application/pdf')})
+    assert r.status_code == 201
+    return h, org, r.json()['id']
+
+
+def _run_concurrent_reviews(monkeypatch, h, org, doc, decisions):
+    barrier = threading.Barrier(len(decisions), timeout=5)
+    real_conn = main.conn
+
+    class Gate:
+        def __init__(self, tx):
+            self.tx = tx
+
+        def execute(self, sql, params=()):
+            if sql.lstrip().upper().startswith('UPDATE DOCUMENTS'):
+                barrier.wait()  # force both requests to reach the write together
+            return self.tx.execute(sql, params)
+
+
+    @contextmanager
+    def gated():
+        with real_conn() as tx:
+            yield Gate(tx)
+
+    monkeypatch.setattr(main, 'conn', gated)
+    results = []
+
+    def run(decision):
+        with TestClient(main.app) as c:  # one client per thread
+            results.append(c.post(f'/v1/organizations/{org}/documents/{doc}/review',
+                                  json={'decision': decision}, headers=h))
+
+    threads = [threading.Thread(target=run, args=(d,)) for d in decisions]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(15)
+    monkeypatch.setattr(main, 'conn', real_conn)
+    return results
+
+
+def _assert_single_winner(client, h, org, results):
+    assert sorted(r.status_code for r in results) == [200, 409]
+    winner = next(r.json()['status'] for r in results if r.status_code == 200)
+    docs = client.get(f'/v1/organizations/{org}/documents', headers=h).json()
+    assert docs[0]['status'] == winner
+    audit = client.get(f'/v1/organizations/{org}/audit', headers=h).json()
+    assert [e['event'] for e in audit if e['event'] in REVIEW_EVENTS] == ['document.' + winner]
+
+
+
+def test_concurrent_approve_and_reject_only_one_wins(client, monkeypatch):
+    h, org, doc = _org_with_doc(client)
+    results = _run_concurrent_reviews(monkeypatch, h, org, doc, ['approve', 'reject'])
+    _assert_single_winner(client, h, org, results)
+
+
+def test_two_identical_review_requests_only_one_succeeds(client, monkeypatch):
+    h, org, doc = _org_with_doc(client)
+    results = _run_concurrent_reviews(monkeypatch, h, org, doc, ['approve', 'approve'])
+    _assert_single_winner(client, h, org, results)
+
+
+def test_review_unknown_document_still_404(client):
+    h, org, _ = _org_with_doc(client)
+    r = client.post(f'/v1/organizations/{org}/documents/does-not-exist/review',
+                    json={'decision': 'approve'}, headers=h)
+    assert r.status_code == 404
+
+
+def test_download_missing_original_is_not_audited(client):
+    h, org, doc = _org_with_doc(client)
+    for p in (main.FILES / org).iterdir():
+        p.unlink()
+    r = client.get(f'/v1/organizations/{org}/documents/{doc}/original', headers=h)
+    assert r.status_code == 404  # old code: RuntimeError/500
+    audit = client.get(f'/v1/organizations/{org}/audit', headers=h).json()
+    assert not any(e['event'] == 'document.downloaded' for e in audit)
+Codex cần xác minh
+Chạy 4 test trên code cũ: hai test race và test download phải FAIL.
+Áp 3 patch và chạy lại: cả 4 test phải PASS, cộng thêm 44 test cũ. Trên SQLite, request thua có thể chờ busy-timeout tối đa khoảng 5 giây, đây là hành vi bình thường.
+Chạy lại trên PostgreSQL khi có môi trường. Patch dựa vào row lock của UPDATE có điều kiện, nên phải hoạt động đúng ở READ COMMITTED mà không cần SELECT … FOR UPDATE.
+Production gate giữ nguyên. Patch không động tới auth, UI, email hay dịch vụ ngoài.
+
+
+
+
+
+3 phút trước

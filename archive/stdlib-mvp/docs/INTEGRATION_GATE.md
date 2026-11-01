@@ -1,0 +1,11 @@
+# Integration gate — required before calling feature complete
+- [ ] Genuine test upload persists and is accessible after restart
+- [ ] Accountant can only view companies explicitly authorized
+- [ ] OCR engine results visibly distinguished from fixtures/manual entry
+- [ ] CZ VAT net+tax=gross validation with multi-rate rounding tolerances and exceptions
+- [ ] Original invoice preserved, corrections versioned with audit trail
+- [ ] Duplicate detection flags instead of destroying data
+- [ ] Supplier profiles group correctly by legal ID, allow alias and branch
+- [ ] Unit tests, integration tests, basic keyboard/mobile checks pass
+- [ ] No private documents or secrets committed
+- [ ] Neither agent claims tax filing or real bank reconciliation without verified integration

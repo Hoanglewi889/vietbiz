@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "browser": "Chromium",
+  "browserVersion": "153.0.8010.0",
+  "checks": 18,
+  "passed": [
+    "Sample workflow creates three tasks",
+    "Company summary is loaded",
+    "Internal accountant note is shown to accountant",
+    "Owner cannot see accountant-only note",
+    "Client reply is persisted",
+    "Owner cannot mark the task done",
+    "Accountant completes submitted work",
+    "Reopening preserves the completion history",
+    "User input is rendered as text",
+    "Czech UI labels are translated",
+    "Language does not change company context",
+    "Related original remains in documents view",
+    "Authorized original download works",
+    "Mobile layout has no horizontal overflow",
+    "Mobile task form opens",
+    "Deselecting company clears task details",
+    "Deselecting company clears financial summary",
+    "No browser JavaScript errors"
+  ],
+  "errors": []
+}

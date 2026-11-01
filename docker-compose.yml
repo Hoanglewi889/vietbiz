@@ -1,0 +1,14 @@
+services:
+  api:
+    build: ./services/api
+    command: ["sh", "-c", "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      VIETBIZ_DATA_DIR: /data
+      VIETBIZ_ENV: development
+      VIETBIZ_AUTH_MODE: demo
+    volumes:
+      - vietbiz_demo_data:/data
+volumes:
+  vietbiz_demo_data:
