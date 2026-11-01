@@ -56,7 +56,9 @@ or a test passed.
 
 ## Next sequence
 
-1. Verify GitHub quality jobs, including PostgreSQL and restore behavior.
+1. Preserve the green GitHub quality baseline: 74 SQLite tests, 74 PostgreSQL tests,
+   verified restore and 18 Chromium checks passed for import commit `e1944c4`.
+   See `docs/GITHUB_SETUP_2026-11-01.md` and recheck CI for new code changes.
 2. Independent review of Sprint 10 task authorization and VI/CS workflow.
 3. Document correction/resubmission with immutable, versioned originals.
 4. OCR/extraction contract and clearly labeled synthetic adapter, then an approved

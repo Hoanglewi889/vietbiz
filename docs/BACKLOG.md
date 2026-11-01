@@ -15,8 +15,10 @@ and migration history. The accountant collaboration specification is preserved i
 
 ## Next engineering priorities
 
-1. Run the expanded suite against disposable PostgreSQL plus backup/restore rehearsal.
-   CI contains the job; no hosted run or local PostgreSQL run is claimed here.
+1. Maintain the now-verified PostgreSQL and backup/restore baseline. First hosted
+   run passed on 2026-11-01: 74 SQLite tests, 74 PostgreSQL tests, restore comparison
+   and 18 browser checks. Evidence: docs/GITHUB_SETUP_2026-11-01.md. Recheck CI for
+   each subsequent code change; no local PostgreSQL execution is claimed.
 2. Independently review the new task API and UI, including role changes during in-flight writes.
 3. Add safe document correction/resubmission with versioned originals and reviewer evidence.
    Current document `needs_changes` state still has no resubmission endpoint.

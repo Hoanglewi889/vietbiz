@@ -3,6 +3,26 @@
 Repository: https://github.com/Hoanglewi889/vietbiz. Visibility: private.
 Default integration branch: `main`.
 
+## Verified remote result
+
+Source import commit: `e1944c4c97465e2b4d9efef493f3981da92afefd`.
+All 115 imported file paths, Git blob hashes and file modes were compared with the
+local index: exact match; the remote tree was not truncated.
+
+[GitHub Actions run 41285813356](https://github.com/Hoanglewi889/vietbiz/actions/runs/41285813356)
+completed successfully for that source commit:
+
+| Hosted check | Observed result |
+| --- | --- |
+| SQLite API suite | 74 passed, 1 upstream warning |
+| Dependency audit | No known vulnerabilities found |
+| PostgreSQL 16 API suite | 74 passed, 1 upstream warning |
+| PostgreSQL dump/restore comparison | All restored table rows match source |
+| Chromium workflow and responsive checks | 18 passed; Chromium 151.0.7922.34 |
+
+These results were read from the completed job logs, not inferred from workflow
+configuration. This documentation update does not change application or test code.
+
 ## Source import
 
 - Active code: `VietBiz_Sprint10_Accountant_Workspace.zip`, preserving all application,

@@ -116,6 +116,11 @@ of Sprint 10 and hosted CI were not performed for that original ZIP delivery.
 Prior Claude review evidence covers Sprint 09 only. The GitHub setup record above
 tracks the subsequent repository import separately from this historical evidence.
 
+The first hosted [GitHub Actions run](https://github.com/Hoanglewi889/vietbiz/actions/runs/41285813356)
+for source commit `e1944c4` passed: **74 SQLite tests, 74 PostgreSQL tests, verified
+PostgreSQL backup/restore, dependency audit and 18 Chromium checks**. See the setup
+record for exact scope and remaining production blockers.
+
 ## Product and security boundaries
 
 Use synthetic documents only. Demo `X-User` can impersonate users and must not be
