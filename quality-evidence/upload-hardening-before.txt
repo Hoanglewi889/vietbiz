@@ -1,0 +1,6 @@
+PASSED tests/test_upload_hardening.py::test_failed_insert_leaves_no_staged_or_final_file
+FAILED tests/test_upload_hardening.py::test_oversized_request_rejected_before_handler_runs
+FAILED tests/test_upload_hardening.py::test_upload_without_content_length_is_rejected
+FAILED tests/test_upload_hardening.py::test_upload_rechecks_membership_inside_write_transaction
+FAILED tests/test_upload_hardening.py::test_original_is_not_published_before_commit
+4 failed, 1 passed, 1 warning in 0.54s

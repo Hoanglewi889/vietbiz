@@ -7,7 +7,7 @@ from uuid import uuid4
 from typing import Literal
 import os
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -29,8 +29,32 @@ FILES = ROOT / 'originals'
 FILES.mkdir(exist_ok=True)
 DB = ROOT / 'vietbiz.sqlite3'
 MAX_BYTES = 10 * 1024 * 1024
+UPLOAD_LIMIT = MAX_BYTES + 64 * 1024  # multipart boundary and part headers
 MIMES = {'application/pdf':'.pdf','image/jpeg':'.jpg','image/png':'.png'}
 app = FastAPI(title='VietBiz API — Sprint 10',version='0.10.0',description='LOCAL ONLY. OIDC JWT verification by default; explicit demo mode available.')
+
+
+class UploadSizeLimit:
+    """Reject oversized document uploads before multipart parsing spools them to disk.
+
+    Relies on the ASGI server enforcing the declared Content-Length; requests without one
+    (chunked) are refused for this route. The in-handler MAX_BYTES check remains."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['method'] != 'POST' or not scope['path'].endswith('/documents'):
+            return await self.app(scope, receive, send)
+        length = dict(scope['headers']).get(b'content-length')
+        if length is None or not length.isdigit():
+            return await JSONResponse({'detail': 'Content-Length required'}, status_code=411)(scope, receive, send)
+        if int(length) > UPLOAD_LIMIT:
+            return await JSONResponse({'detail': 'File larger than 10 MB'}, status_code=413)(scope, receive, send)
+        return await self.app(scope, receive, send)
+
+
+# Added before CORS so CORS stays outermost and early 411/413 responses keep CORS headers.
+app.add_middleware(UploadSizeLimit)
 app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
 from .database import connection as conn, require_schema
 require_schema()
@@ -160,14 +184,23 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
     magic=(mime=='application/pdf' and content.startswith(b'%PDF-')) or (mime=='image/jpeg' and content.startswith(b'\xff\xd8\xff')) or (mime=='image/png' and content.startswith(b'\x89PNG\r\n\x1a\n'))
     if not magic:raise HTTPException(415,'MIME and file signature differ')
     did=str(uuid4()); org_dir=FILES / org_id;org_dir.mkdir(exist_ok=True)
-    target=org_dir / (did+MIMES[mime]); target.write_bytes(content)
+    target=org_dir / (did+MIMES[mime]); partial=org_dir / ('.'+did+'.part')
+    # Stage under a non-servable name; publish only after the row commits.
+    partial.write_bytes(content)
     try:
       with conn() as c:
+        authorize(c,uid,org_id,('owner','employee'))  # re-check inside the write transaction
         c.execute('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),sha256(content).hexdigest(),len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
         event(c,org_id,uid,'document.uploaded',did)
-    except Exception:
-      target.unlink(missing_ok=True)
+    except BaseException:
+      partial.unlink(missing_ok=True)
       raise
+    # A crash before this rename leaves a committed row with a .part file: app.maintenance promotes it.
+    try:
+      os.replace(partial,target)
+    except FileNotFoundError:
+      # The reconcile tool already promoted this committed upload; accept only the same-size original.
+      if not (target.is_file() and target.stat().st_size==len(content)): raise
     return {'id':did,'organization_id':org_id,'status':'needs_review','sha256':sha256(content).hexdigest(),'size_bytes':len(content)}
 @app.get('/v1/organizations/{org_id}/documents')
 def documents(org_id:str,uid:str=Depends(current_user)):
