@@ -196,7 +196,11 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
       partial.unlink(missing_ok=True)
       raise
     # A crash before this rename leaves a committed row with a .part file: app.maintenance promotes it.
-    os.replace(partial,target)
+    try:
+      os.replace(partial,target)
+    except FileNotFoundError:
+      # The reconcile tool already promoted this committed upload; accept only the same-size original.
+      if not (target.is_file() and target.stat().st_size==len(content)): raise
     return {'id':did,'organization_id':org_id,'status':'needs_review','sha256':sha256(content).hexdigest(),'size_bytes':len(content)}
 @app.get('/v1/organizations/{org_id}/documents')
 def documents(org_id:str,uid:str=Depends(current_user)):

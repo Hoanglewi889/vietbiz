@@ -1,6 +1,6 @@
 """Originals storage reconcile tool: dry-run by default, never deletes referenced data."""
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from test_api import c, h, user
 
@@ -18,7 +18,7 @@ def uploaded():
 
 
 def age(path, hours):
-    old = (datetime.now(UTC) - timedelta(hours=hours)).timestamp()
+    old = (datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp()
     os.utime(path, (old, old), follow_symlinks=False)
 
 
@@ -28,6 +28,7 @@ def test_reconcile_promotes_committed_partial_and_removes_only_stale_orphans():
     final = folder / f'{did}.pdf'
     partial = folder / f'.{did}.part'
     os.replace(final, partial)  # crash after commit, before rename
+    age(partial, 2)  # promotion only touches partials older than the in-flight grace period
     stale = folder / '.00000000-dead-beef-0000-000000000000.part'
     stale.write_bytes(PDF)
     age(stale, 2)
@@ -69,3 +70,42 @@ def test_reconcile_ignores_symlinks_and_foreign_tenant_paths(tmp_path):
     assert str(folder / f'.{other_did}.part') not in result['promoted']
     assert (folder / f'.{other_did}.part').exists()
     assert not (main.FILES / other_org / f'{other_did}.pdf').exists()
+
+
+def finalize_with_concurrent_reconcile(monkeypatch, min_age):
+    """Run reconcile(apply=True) exactly between the upload commit and its final rename."""
+    real_replace, state = os.replace, {'busy': False, 'report': None}
+    def replace(src, dst, *args, **kwargs):
+        if not state['busy'] and str(src).endswith('.part') and state['report'] is None:
+            state['busy'] = True
+            try:
+                state['report'] = maintenance.reconcile(main.FILES, apply=True, min_age=min_age)
+            finally:
+                state['busy'] = False
+        return real_replace(src, dst, *args, **kwargs)
+    monkeypatch.setattr(os, 'replace', replace)
+    owner = user('Concurrent reconcile owner')
+    org = c.post('/v1/organizations', headers=h(owner), json={'name': 'Concurrent'}).json()['id']
+    response = c.post(f'/v1/organizations/{org}/documents', headers=h(owner),
+                      files={'file': ('a.pdf', PDF, 'application/pdf')})
+    monkeypatch.setattr(os, 'replace', real_replace)
+    return owner, org, response, state['report']
+
+
+def test_upload_survives_reconcile_promoting_its_partial(monkeypatch):
+    owner, org, response, report = finalize_with_concurrent_reconcile(monkeypatch, timedelta(0))
+    assert report['promoted']  # reconcile really consumed the in-flight .part
+    assert response.status_code == 201
+    did = response.json()['id']
+    assert sorted(p.name for p in (main.FILES / org).iterdir()) == [f'{did}.pdf']
+    with main.conn() as db:
+        assert db.execute('SELECT COUNT(*) AS n FROM documents WHERE organization_id=?', (org,)).fetchone()['n'] == 1
+    assert c.get(f'/v1/organizations/{org}/documents/{did}/original', headers=h(owner)).content == PDF
+
+
+def test_default_reconcile_leaves_in_flight_partial_alone(monkeypatch):
+    _, org, response, report = finalize_with_concurrent_reconcile(monkeypatch, maintenance.STALE_AFTER)
+    assert response.status_code == 201
+    did = response.json()['id']
+    assert not any(did in item for item in report['promoted'] + report['stale_partials'])
+    assert sorted(p.name for p in (main.FILES / org).iterdir()) == [f'{did}.pdf']

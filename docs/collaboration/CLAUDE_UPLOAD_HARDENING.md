@@ -13,8 +13,8 @@ limits enforced only after Starlette has spooled the whole body.
 | --- | --- | --- |
 | Pre-parse size limit | `services/api/app/main.py` (`UploadSizeLimit`) | `POST …/documents`: no/invalid `Content-Length` → 411; above `MAX_BYTES + 64 KiB` → 413 before the handler or multipart parser runs. In-handler 10 MB check kept. Added inside CORS, so early errors keep CORS headers |
 | Write-time authorization | `upload_document` | `authorize()` repeated inside the INSERT transaction |
-| Staged original | `upload_document` | Bytes written to `.<id>.part`, renamed to `<id>.<ext>` only after commit; failures delete the `.part` |
-| Reconcile tool | `services/api/app/maintenance.py` | `python -m app.maintenance [--apply]`, dry-run by default. Promotes a committed `.part`; deletes only row-less `.part` files older than 1 h; reports (never deletes) row-less final files; ignores symlinks and rows of another tenant. Does not import `app.main`, so it runs without OIDC settings |
+| Staged original | `upload_document` | Bytes written to `.<id>.part`, renamed to `<id>.<ext>` only after commit; failures delete the `.part`. If the rename finds the `.part` already promoted by reconcile, a same-size final file is accepted instead of failing a committed upload |
+| Reconcile tool | `services/api/app/maintenance.py` | `python -m app.maintenance [--apply]`, dry-run by default. Promotes a committed `.part` only after the same 1 h grace period (never an in-flight upload); deletes only row-less `.part` files older than 1 h; reports (never deletes) row-less final files; ignores symlinks and rows of another tenant. Does not import `app.main`, so it runs without OIDC settings |
 
 No schema change, no UI change, no new dependency. 413 message unchanged; 411 is
 new and only affects clients that upload with chunked transfer encoding (browsers
@@ -30,6 +30,18 @@ send `Content-Length` for `FormData`, which `apps/accountant-web/app.js` uses).
 - Real uvicorn smoke (demo mode, synthetic PDF): normal upload 201; 11 MB body 413 with
   `access-control-allow-origin`; `Transfer-Encoding: chunked` 411; only the final file left on disk.
 - `ruff check` on the three new files: clean. `main.py` finding count unchanged (13, pre-existing).
+
+## Codex PR review follow-up (PR #1, commit 2eb7c7d)
+- P2 Python 3.10: `datetime.UTC` (introduced by a `ruff --fix`) broke the README's 3.10+ minimum.
+  Reproduced on CPython 3.10.20 (collection ImportError); replaced with `timezone.utc`.
+  Keep `UP017` ignored for new code until the minimum Python moves to 3.11.
+- P2 reconcile/upload race: reconcile could promote a just-committed `.part` before the upload's own
+  rename, so the request raised `FileNotFoundError` after commit. Reproduced deterministically by
+  running `reconcile(apply=True, min_age=0)` between commit and rename (2 new tests failed). Fixed by
+  the grace period for promotion plus tolerant finalization; both tests now pass.
+- After the follow-up: SQLite 83 passed on Python 3.13.18 and on 3.10.20 (unpinned
+  `requirements-dev.txt`, since the pinned `requirements-tested.txt` does not resolve on 3.10);
+  PostgreSQL 16.15 83 passed.
 
 ## Not verified / remaining
 - GitHub Actions run, Compose stack, live OIDC, Playwright UI suite (`npm run test:ui`) not run here.

@@ -2,7 +2,7 @@
 
 Usage (from services/api):  python -m app.maintenance [--apply]
 
-- committed row + `.<id>.part` + no final file  -> rename to the final name (promote)
+- committed row + `.<id>.part` older than an hour + no final file -> rename (promote)
 - `.<id>.part` with no row, older than an hour  -> delete (only with --apply)
 - final file with no row                        -> report only; a human decides
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .database import connection
@@ -26,7 +26,7 @@ def default_files_root() -> Path:
 
 def reconcile(files_root: Path | None = None, apply: bool = False, min_age: timedelta = STALE_AFTER, now=None):
     root = (files_root or default_files_root()).resolve()
-    now = now or datetime.now(UTC)
+    now = now or datetime.now(timezone.utc)
     report = {'promoted': [], 'stale_partials': [], 'unreferenced': []}
     if not root.is_dir():
         return report
@@ -40,10 +40,12 @@ def reconcile(files_root: Path | None = None, apply: bool = False, min_age: time
         for path in sorted(org_dir.iterdir()):
             if path.is_symlink() or not path.is_file():
                 continue
-            old_enough = now - datetime.fromtimestamp(path.stat().st_mtime, UTC) > min_age
+            old_enough = now - datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) > min_age
             if path.name.startswith('.') and path.name.endswith('.part'):
                 did = path.name[1:-len('.part')]
                 if did in rows:
+                    if not old_enough:
+                        continue  # an upload may still be between commit and its own rename
                     org_id, storage_path = rows[did]
                     dest = Path(storage_path)
                     if (org_id == org_dir.name and dest.parent.resolve() == org_real
