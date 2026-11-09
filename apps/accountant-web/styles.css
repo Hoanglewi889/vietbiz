@@ -791,6 +791,12 @@ label.check {
   gap: 8px;
   font-weight: 500;
 }
+.source-note.imported {
+  color: var(--ink);
+  background: var(--lime);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
 .extract-actions {
   display: flex;
   flex-wrap: wrap;

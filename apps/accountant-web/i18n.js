@@ -122,6 +122,8 @@ const COPY = {
     noPreview: "Không xem trước được định dạng này. Dùng nút Bản gốc để tải về.",
     manualEntryNotice:
       "Dữ liệu đang được nhập tay. Chưa có AI tự đọc hóa đơn trong bản thử nghiệm này.",
+    isdocSourceNotice:
+      "Dữ liệu được đọc tự động từ hóa đơn điện tử ISDOC nhúng trong PDF — không cần nhập tay. Nếu sửa và lưu, bản sửa thành phiên bản mới.",
     supplier: "Người bán",
     supplierName: "Tên và trụ sở người bán",
     vatId: "DIČ",
@@ -315,6 +317,8 @@ const COPY = {
     noPreview: "Tento formát nelze zobrazit. Stáhněte originál tlačítkem Originál.",
     manualEntryNotice:
       "Údaje se zadávají ručně. Automatické čtení dokladu (AI) v této ukázce zatím není.",
+    isdocSourceNotice:
+      "Údaje byly načteny automaticky z elektronické faktury ISDOC vložené do PDF — bez ručního přepisu. Uložená oprava vytvoří novou verzi.",
     supplier: "Dodavatel",
     supplierName: "Označení a sídlo dodavatele",
     vatId: "DIČ",

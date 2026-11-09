@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
 
 from .database import connection
@@ -79,6 +79,27 @@ def check_to_json(result):
                           'basis': f.basis, 'detail': f.detail} for f in result.findings]}
 
 
+def _insert(db, org_id, doc_id, uid, version, source, fields: 'FieldsIn', check):
+    db.execute('INSERT INTO document_extractions VALUES(?,?,?,?,?,?,?,?)',
+               (doc_id, org_id, version, source,
+                json.dumps(fields.model_dump(mode='json'), ensure_ascii=False, sort_keys=True),
+                json.dumps(check, ensure_ascii=False, sort_keys=True), uid,
+                datetime.now(timezone.utc).isoformat()))
+
+
+def record_isdoc(db, org_id, uid, doc_id, raw_fields):
+    """Store ISDOC data as revision 1 inside the upload transaction. Invalid data is skipped."""
+    if raw_fields is None:
+        return False
+    try:
+        fields = FieldsIn(**raw_fields)
+    except ValidationError:
+        return False
+    check = check_to_json(check_tax_document(to_tax_document(fields)))
+    _insert(db, org_id, doc_id, uid, 1, 'isdoc', fields, check)
+    return True
+
+
 def public(row):
     return {'document_id': row['document_id'], 'version': row['version'], 'source': row['source'],
             'fields': json.loads(row['fields']), 'check': json.loads(row['check_result']),
@@ -126,12 +147,8 @@ def build_router(current_user, authorize, audit):
             current = row['version'] if row else 0
             if body.version != current:
                 raise HTTPException(409, 'Invoice data changed; reload before saving')
-            now = datetime.now(timezone.utc).isoformat()
             try:
-                db.execute('INSERT INTO document_extractions VALUES(?,?,?,?,?,?,?,?)',
-                           (doc_id, org_id, current + 1, body.source,
-                            json.dumps(body.fields.model_dump(mode='json'), ensure_ascii=False, sort_keys=True),
-                            json.dumps(check, ensure_ascii=False, sort_keys=True), uid, now))
+                _insert(db, org_id, doc_id, uid, current + 1, body.source, body.fields, check)
             except IntegrityError:
                 raise HTTPException(409, 'Invoice data changed; reload before saving') from None
             audit(db, org_id, uid, 'document.extraction_saved', doc_id)
