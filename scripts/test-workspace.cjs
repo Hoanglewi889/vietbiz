@@ -505,6 +505,125 @@ const path = require("node:path");
         fullPage: true,
       });
     await page.setViewportSize({ width: 1440, height: 1100 });
+    // Issued invoices (CR-5): seller profile, draft, issue, print, ISDOC.
+    await page.locator("#invoices-tab").click();
+    await page.locator("#invoice-list .empty").waitFor();
+    check(
+      "Invoices start by asking for the seller details",
+      await page.locator("#billing-details").evaluate((d) => d.open),
+    );
+    await page.locator("#b-legal_name").fill("Synthetic Bistro s.r.o.");
+    await page.locator("#b-address").fill("Ukázková 1, 110 00 Praha 1");
+    await page.locator("#b-ico").fill("00000019");
+    await page.locator("#b-dic").fill("CZ 000 000 19");
+    await page.locator("#b-vat_payer").check();
+    await page.locator("#b-iban").fill("CZ65 0800 0000 1920 0014 5399");
+    await page.locator("#billing-save").click();
+    await page.waitForFunction(() => !document.querySelector("#billing-details").open);
+    await page.locator("#new-invoice").click();
+    await page.locator("#i-customer_name").fill("Synthetic Customer a.s.");
+    await page.locator("#i-customer_address").fill("Vzorová 2, 602 00 Brno");
+    await page.locator("#i-customer_dic").fill("CZ00000027");
+    const invLine = (n) => page.locator(`#i-lines .invoice-line:nth-child(${n})`);
+    await invLine(1).locator('[data-key="description"]').fill("Phở bò");
+    await invLine(1).locator('[data-key="quantity"]').fill("3");
+    await invLine(1).locator('[data-key="unit_price"]').fill("99,90");
+    await page.locator("#i-add-line").click();
+    await invLine(2).locator('[data-key="description"]').fill("Catering");
+    await invLine(2).locator('[data-key="quantity"]').fill("2");
+    await invLine(2).locator('[data-key="unit"]').fill("hod");
+    await invLine(2).locator('[data-key="unit_price"]').fill("45,50");
+    await invLine(2).locator('[data-key="vat_rate"]').selectOption("12");
+    await page.locator("#invoice-save").click();
+    await waitText("#i-totals", "464,56");
+    check(
+      "The server totals the draft with VAT per rate",
+      (await page.locator("#i-totals").innerText()).includes("62,94"),
+    );
+    await page.locator("#invoice-issue").click();
+    await page.waitForFunction(() => document.querySelector("#invoice-form").hidden);
+    const year = await page.evaluate(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(new Date()).slice(0, 4));
+    await waitText("#invoice-list", year + "-0001");
+    check(
+      "Issuing assigns the first number of the year and freezes the invoice",
+      (await page.locator(".invoice-row").count()) === 1 &&
+        (await page.locator(".invoice-row").getByRole("button", { name: "Sửa" }).count()) === 0,
+    );
+    await page.locator(".invoice-row").getByRole("button", { name: "Xem & in" }).click();
+    await page.locator("#print-dialog[open]").waitFor();
+    const paper = await page.locator("#invoice-print").innerText();
+    check(
+      "The printable invoice carries the § 29 details in Czech",
+      paper.includes("Faktura – daňový doklad č. " + year + "-0001") &&
+        paper.includes("DIČ: CZ00000019") &&
+        paper.includes("Datum uskutečnění zdanitelného plnění") &&
+        paper.includes("Variabilní symbol") &&
+        paper.includes("Celkem k úhradě"),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "invoice-print.png"),
+      });
+    await page.locator("#close-print").click();
+    const [isdocFile] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator(".invoice-row").getByRole("button", { name: "Tải ISDOC" }).click(),
+    ]);
+    const isdocText = fs.readFileSync(await isdocFile.path(), "utf8");
+    check(
+      "ISDOC export downloads with VAT data",
+      isdocFile.suggestedFilename() === "faktura-" + year + "-0001.isdoc" &&
+        isdocText.includes("<VATApplicable>true</VATApplicable>") &&
+        isdocText.includes("<PayableAmount>464.56</PayableAmount>"),
+    );
+    // Codex review, PR #7: deleting a draft (204, no body) must refresh the list, not fail.
+    await page.locator("#new-invoice").click();
+    await page.locator("#i-customer_name").fill("Synthetic Draft s.r.o.");
+    await page.locator("#i-customer_address").fill("Vzorová 3, 602 00 Brno");
+    await invLine(1).locator('[data-key="description"]').fill("Synthetic draft line");
+    await invLine(1).locator('[data-key="unit_price"]').fill("10");
+    await page.locator("#invoice-save").click();
+    await page.waitForFunction(() => document.querySelectorAll(".invoice-row").length === 2);
+    await page.locator(".invoice-row").filter({ hasText: "Synthetic Draft" }).getByRole("button", { name: "Xóa nháp" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".invoice-row").length === 1);
+    check(
+      "Deleting a draft refreshes the list and closes its editor",
+      (await page.locator("#invoice-form").isHidden()) &&
+        !(await page.locator("#notice").evaluate((n) => n.classList.contains("error"))),
+    );
+    await page.locator("#language").selectOption("cs");
+    check(
+      "Invoices are translated to Czech",
+      (await page.locator("#invoices-tab").innerText()) === "Vydané faktury",
+    );
+    await page.locator("#language").selectOption("vi");
+    await page.locator("#new-invoice").click();
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "invoices-desktop.png"),
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "Invoice editor fits a 390 px screen",
+      await page.evaluate(() => {
+        const view = document.querySelector("#invoices-view");
+        const edge = view.getBoundingClientRect().right - parseFloat(getComputedStyle(view).paddingRight);
+        return (
+          document.documentElement.scrollWidth <= innerWidth &&
+          [...view.querySelectorAll("input, select, button")]
+            .filter((el) => el.offsetParent)
+            .every((el) => el.getBoundingClientRect().right <= edge + 1)
+        );
+      }),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "invoices-mobile.png"),
+        fullPage: true,
+      });
+    await page.locator("#invoice-cancel").click();
+    await page.setViewportSize({ width: 1440, height: 1100 });
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });

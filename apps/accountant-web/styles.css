@@ -849,6 +849,189 @@ main {
 .void-form input {
   min-width: 0;
 }
+.billing-details {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.billing-details summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.invoice-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 14px 0 0;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+.invoice-grid legend {
+  font-weight: 650;
+  padding: 0;
+}
+.invoice-grid label,
+.invoice-line label {
+  min-width: 0;
+}
+.invoice-grid input,
+.invoice-grid select,
+.invoice-line input,
+.invoice-line select {
+  width: 100%;
+}
+.invoice-grid .wide {
+  grid-column: span 2;
+}
+.invoice-grid .inline-error:empty,
+.invoice-form .inline-error:empty {
+  display: none;
+}
+.invoice-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.invoice-form[hidden] {
+  display: none;
+}
+.invoice-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.invoice-lines {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+.invoice-line {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 0.9fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.invoice-line label[hidden] {
+  display: none;
+}
+.invoice-totals dl,
+.paper-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  margin: 0;
+  max-width: 460px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.invoice-totals dd,
+.paper-facts dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 650;
+}
+#new-invoice {
+  white-space: nowrap;
+}
+.invoice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.invoice-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.invoice-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.invoice-row button {
+  font-size: 12px;
+}
+.invoice-paper {
+  background: #fff;
+  color: #111;
+  padding: 28px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.invoice-paper h1 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.paper-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+.paper-party h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.paper-party p {
+  margin: 0;
+}
+.paper-facts {
+  margin: 0 0 16px;
+  max-width: none;
+}
+.invoice-paper table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+.invoice-paper th,
+.invoice-paper td {
+  border-bottom: 1px solid #ddd;
+  padding: 6px 4px;
+  text-align: right;
+}
+.invoice-paper th:first-child,
+.invoice-paper td:first-child {
+  text-align: left;
+}
+.paper-recap {
+  max-width: 420px;
+  margin-left: auto;
+}
+.paper-total {
+  text-align: right;
+  font-size: 17px;
+  font-weight: 700;
+}
+@media print {
+  body > :not(#print-dialog) {
+    display: none !important;
+  }
+  #print-dialog {
+    position: static;
+    border: 0;
+    padding: 0;
+    max-width: none;
+    width: auto;
+  }
+  #print-dialog::backdrop {
+    display: none;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .invoice-paper {
+    border: 0;
+    padding: 0;
+  }
+}
 footer {
   display: flex;
   justify-content: space-between;
@@ -1069,6 +1252,30 @@ label.check {
   }
 }
 @media (max-width: 760px) {
+  .invoice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .invoice-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .invoice-line .grow {
+    grid-column: 1 / -1;
+  }
+  .invoice-row {
+    flex-wrap: wrap;
+  }
+  .invoice-row > div {
+    flex-basis: 100%;
+  }
+  .paper-parties {
+    grid-template-columns: 1fr;
+  }
+  .invoice-paper {
+    padding: 14px;
+    overflow-x: auto;
+  }
   .cash-totals,
   .cash-breakdown {
     grid-template-columns: 1fr;

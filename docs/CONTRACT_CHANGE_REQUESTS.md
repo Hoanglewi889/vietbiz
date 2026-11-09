@@ -174,3 +174,35 @@ overview. It is a management view on a cash basis, not a tax return or a stateme
   to `documents(id, organization_id)`.
 - Not yet: EUR cash against the limit (needs the ČNB rate of the day), partial payments of one
   invoice, employees recording the till, VAT in the report (comes with issued invoices).
+
+## CR-5 · Issued invoices
+
+- Requested by: Claude, 2026-11-09 · Implemented in: `claude/issued-invoices`
+- Status: proposed in PR, awaiting Codex review · Depends on: CR-4
+
+Small businesses issue invoices to their customers: drafts, gapless numbers, a printable
+Czech invoice and an ISDOC 6.0.2 export. Only CZK for now.
+
+| Method | Path | Roles | Result |
+| --- | --- | --- | --- |
+| `GET`/`PUT` | `/v1/organizations/{org_id}/billing-profile` | owner, accountant | `{profile}`; payer needs a DIČ (`422`); audit `billing_profile.updated` |
+| `POST` | `/v1/organizations/{org_id}/invoices` + `Idempotency-Key` | owner, accountant | `201` draft · `200` same draft on retry · `409` key reused |
+| `GET` | `/v1/organizations/{org_id}/invoices[?status=]`, `/invoices/{id}` | owner, accountant | invoices with server-computed `totals` |
+| `PUT` | `/v1/organizations/{org_id}/invoices/{id}` `{…, version}` | owner, accountant | draft only; `409` issued or stale version |
+| `DELETE` | `/v1/organizations/{org_id}/invoices/{id}` | owner, accountant | `204` draft · `409` issued |
+| `POST` | `/v1/organizations/{org_id}/invoices/{id}/issue` | owner, accountant | `200` issued (repeat returns the same) · `422 {code}`: `billing_profile_missing`, `vat_status_changed`, `tax_document_incomplete` (+ findings) |
+| `GET` | `/v1/organizations/{org_id}/invoices/{id}/isdoc` | owner, accountant | ISDOC XML attachment · `409` draft |
+
+- Lines: description, quantity (≤ 3 decimals), unit, net unit price, `vat_rate` 21/12 for a
+  payer and `null` for a non-payer (anything else `422`). Line net rounded half-up to haléře;
+  tax per rate from the summed base (§ 37), total = bases + taxes.
+- Issue: company row locked, next number `YYYY-NNNN` for the issue-date year (gapless; deleted
+  drafts never consume a number), supplier profile snapshot frozen, payer invoices must pass
+  `check_tax_document` (§ 29), `issued_after_15_days` review finding (§ 28 odst. 4).
+  Variable symbol `YYYYNNNN`. Audit `invoice.draft_created|draft_updated|draft_deleted|issued`.
+- Migration `0007_issued_invoices`: `billing_profiles`, `issued_invoices` with status CHECKs
+  and unique number, sequence and idempotency key per company.
+- ISDOC follows the 6.0.2 element order and round-trips through the CR-2 importer; it has
+  not been validated against the official XSD here (the schema host is not reachable).
+- Not yet: corrective documents (§ 42–45), EUR invoices, reverse charge / exempt lines,
+  payment matching with the cashbook, QR payment code, e-mail delivery.

@@ -130,7 +130,9 @@ async function request(path, options = {}) {
     } catch {}
     throw { status: r.status, detail };
   }
-  const result = options.blob ? await r.blob() : await r.json();
+  // 204 No Content (e.g. a deleted draft) has no body to parse.
+  const result =
+    r.status === 204 ? null : options.blob ? await r.blob() : await r.json();
   if (epoch !== state.epoch)
     throw new DOMException("Stale company response", "AbortError");
   return result;
@@ -181,6 +183,7 @@ function resetContext() {
   state.cashDoc = null;
   $("cash-tab").hidden = true;
   if (!$("cash-view").hidden) setTab("tasks");
+  if (invoicesReady()) resetInvoices();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
@@ -243,7 +246,13 @@ async function switchOrg() {
 }
 async function refresh() {
   if (!state.org) return;
-  await Promise.all([loadDocs(), loadTasks(), loadSummary(), loadCash()]);
+  await Promise.all([
+    loadDocs(),
+    loadTasks(),
+    loadSummary(),
+    loadCash(),
+    invoicesReady() ? loadInvoices() : null,
+  ]);
   if (state.task) await selectTask(state.task.id);
 }
 async function loadSummary() {
@@ -669,6 +678,8 @@ function renderDocs() {
   renderSummary();
   if (!state.shown.length) empty(list, t("noDocuments"));
 }
+// invoices.js loads after this file; it defines the issued-invoice view.
+const invoicesReady = () => typeof loadInvoices === "function";
 // Cashbook (CR-4): money actually received or paid, voided instead of deleted.
 const pragueToday = () =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(
@@ -1192,6 +1203,7 @@ function translate() {
   filter.value = value;
   renderFilterOptions();
   renderCashOptions();
+  if (invoicesReady()) translateInvoices();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1213,7 +1225,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["tasks", "docs", "cash"]) {
+  for (const name of ["tasks", "docs", "cash", "invoices"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));

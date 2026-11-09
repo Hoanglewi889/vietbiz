@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="i18n.js" defer></script>
     <script src="app.js" defer></script>
+    <script src="invoices.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -95,6 +96,12 @@
         <button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
+        ><button
+          id="invoices-tab"
+          class="tab"
+          hidden
+          data-i18n="invoicesTab"
+        ></button
         ><span class="tab-note" data-i18n="scopeNote"></span>
       </div>
       <section id="tasks-view">
@@ -247,6 +254,137 @@
           ></button>
         </form>
         <div id="cash-list" class="cash-list"></div>
+      </section>
+      <section id="invoices-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="invoicesTab"></h2>
+            <p class="muted" data-i18n="invoicesHint"></p>
+          </div>
+          <button
+            id="new-invoice"
+            class="primary"
+            type="button"
+            data-i18n="newInvoice"
+          ></button>
+        </div>
+        <details id="billing-details" class="billing-details">
+          <summary data-i18n="sellerProfile"></summary>
+          <form id="billing-form" class="invoice-grid" novalidate>
+            <label class="wide"
+              ><span data-i18n="legalName"></span
+              ><input id="b-legal_name" maxlength="200" autocomplete="off"
+            /></label>
+            <label class="wide"
+              ><span data-i18n="sellerAddress"></span
+              ><input id="b-address" maxlength="300" autocomplete="off"
+            /></label>
+            <label
+              ><span data-i18n="ico"></span
+              ><input id="b-ico" inputmode="numeric" maxlength="8" autocomplete="off"
+            /></label>
+            <label
+              ><span data-i18n="dic"></span
+              ><input id="b-dic" maxlength="14" autocomplete="off"
+            /></label>
+            <label class="check wide"
+              ><input id="b-vat_payer" type="checkbox" /><span
+                data-i18n="vatPayer"
+              ></span
+            ></label>
+            <label class="wide"
+              ><span data-i18n="iban"></span
+              ><input id="b-iban" maxlength="42" autocomplete="off"
+            /></label>
+            <label class="wide"
+              ><span data-i18n="registerNote"></span
+              ><input id="b-register_note" maxlength="200" autocomplete="off"
+            /></label>
+            <p id="billing-error" class="inline-error wide" role="alert"></p>
+            <button
+              id="billing-save"
+              class="secondary"
+              type="submit"
+              data-i18n="saveProfile"
+            ></button>
+          </form>
+        </details>
+        <form id="invoice-form" class="invoice-form" hidden novalidate>
+          <fieldset class="invoice-grid">
+            <legend data-i18n="invCustomer"></legend>
+            <label class="wide"
+              ><span data-i18n="invCustomerName"></span
+              ><input id="i-customer_name" maxlength="200" autocomplete="off"
+            /></label>
+            <label class="wide"
+              ><span data-i18n="invCustomerAddress"></span
+              ><input id="i-customer_address" maxlength="300" autocomplete="off"
+            /></label>
+            <label
+              ><span data-i18n="customerIco"></span
+              ><input id="i-customer_ico" inputmode="numeric" maxlength="8" autocomplete="off"
+            /></label>
+            <label
+              ><span data-i18n="customerDic"></span
+              ><input id="i-customer_dic" maxlength="14" autocomplete="off"
+            /></label>
+          </fieldset>
+          <fieldset class="invoice-grid">
+            <legend data-i18n="documentDetails"></legend>
+            <label
+              ><span data-i18n="issueDate"></span
+              ><input id="i-issue_date" type="date"
+            /></label>
+            <label
+              ><span data-i18n="invSupplyDate"></span
+              ><input id="i-supply_date" type="date"
+            /></label>
+            <label
+              ><span data-i18n="invDueDate"></span
+              ><input id="i-due_date" type="date"
+            /></label>
+            <label
+              ><span data-i18n="method"></span><select id="i-payment_method"></select
+            ></label>
+            <label class="wide"
+              ><span data-i18n="note"></span
+              ><input id="i-note" maxlength="500" autocomplete="off"
+            /></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="invLines"></legend>
+            <div id="i-lines" class="invoice-lines"></div>
+            <button
+              id="i-add-line"
+              type="button"
+              class="secondary"
+              data-i18n="addItem"
+            ></button>
+          </fieldset>
+          <div id="i-totals" class="invoice-totals" aria-live="polite"></div>
+          <p id="invoice-error" class="inline-error" role="alert"></p>
+          <div class="extract-actions">
+            <button
+              id="invoice-save"
+              class="secondary"
+              type="submit"
+              data-i18n="saveDraft"
+            ></button>
+            <button
+              id="invoice-issue"
+              class="primary"
+              type="button"
+              data-i18n="issueInvoice"
+            ></button>
+            <button
+              id="invoice-cancel"
+              class="icon-button"
+              type="button"
+              data-i18n="close"
+            ></button>
+          </div>
+        </form>
+        <div id="invoice-list" class="invoice-list"></div>
       </section>
       <footer>
         <span>VietBiz · 2026</span><span data-i18n="footer"></span>
@@ -428,6 +566,29 @@
           <p class="muted small" data-i18n="checkDisclaimer"></p>
         </section>
       </div>
+    </dialog>
+    <dialog id="print-dialog" class="wide" aria-labelledby="print-title">
+      <div class="section-heading no-print">
+        <div>
+          <h2 id="print-title" data-i18n="printInvoice"></h2>
+          <p class="muted" data-i18n="printNote"></p>
+        </div>
+        <div>
+          <button
+            type="button"
+            id="print-now"
+            class="primary"
+            data-i18n="print"
+          ></button>
+          <button
+            type="button"
+            id="close-print"
+            class="icon-button"
+            data-i18n="close"
+          ></button>
+        </div>
+      </div>
+      <article id="invoice-print" class="invoice-paper" lang="cs"></article>
     </dialog>
   </body>
 </html>
