@@ -58,8 +58,9 @@ Employees can upload but cannot read or write financial data, matching task acce
   two concurrent writers of the same version produce one `200` and one `409`.
 - Amounts and rates are **strings** (`^-?\d{1,12}(\.\d{1,2})?$`); JSON numbers are
   rejected so money is never parsed as a float. At most 10 lines.
-- `source` is `manual` today. Reserved values for later: `isdoc`, `ocr:<provider>` —
-  an OCR provider needs an owner decision (likely a paid service) and is not faked.
+- Clients may only send `source: "manual"`. The stored column also allows `isdoc`, written
+  by the server when it reads an ISDOC embedded in an uploaded PDF (follow-up PR). An OCR
+  provider needs an owner decision (likely a paid service) and is not faked.
 - Writes are refused once the document is `approved` or `rejected`.
 
 Response (`GET` and `PUT`):

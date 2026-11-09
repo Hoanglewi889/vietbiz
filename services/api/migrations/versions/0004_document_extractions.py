@@ -12,7 +12,7 @@ def upgrade():
         document_id TEXT NOT NULL,
         organization_id TEXT NOT NULL,
         version INTEGER NOT NULL CHECK(version >= 1),
-        source TEXT NOT NULL CHECK(source IN ('manual')),
+        source TEXT NOT NULL CHECK(source IN ('manual','isdoc')),
         fields TEXT NOT NULL,
         check_result TEXT NOT NULL,
         actor_id TEXT NOT NULL REFERENCES users(id),
