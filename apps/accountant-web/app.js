@@ -21,6 +21,7 @@ const state = {
   demo: null,
   extract: null,
   extractTicket: 0,
+  summary: null,
 };
 const retries = new Map();
 const text = (tag, content, className = "") => {
@@ -117,7 +118,13 @@ async function request(path, options = {}) {
   });
   if (epoch !== state.epoch)
     throw new DOMException("Stale company response", "AbortError");
-  if (!r.ok) throw { status: r.status };
+  if (!r.ok) {
+    let detail;
+    try {
+      detail = (await r.json()).detail;
+    } catch {}
+    throw { status: r.status, detail };
+  }
   const result = options.blob ? await r.blob() : await r.json();
   if (epoch !== state.epoch)
     throw new DOMException("Stale company response", "AbortError");
@@ -159,6 +166,10 @@ function resetContext() {
   closeExtraction();
   $("create-form").reset();
   $("upload-form").reset();
+  $("archive-filters").reset();
+  $("archive-filters").hidden = true;
+  $("archive-summary").hidden = true;
+  state.summary = null;
   $("role-badge").textContent = "";
   $("document-list").replaceChildren();
   for (const n of ["active", "waiting", "overdue", "done"])
@@ -478,10 +489,95 @@ function renderDetail() {
   if (state.eventNext)
     panel.append(button(t("more"), () => moreThread("events"), "more"));
 }
+const FINANCE_ROLES = ["owner", "accountant"];
+const money = (value, currency) =>
+  new Intl.NumberFormat(lang === "cs" ? "cs-CZ" : "vi-VN", {
+    style: "currency",
+    currency: currency || "CZK",
+  }).format(Number(value));
+const fill = (template, values) =>
+  template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ""));
+function archiveQuery() {
+  const params = new URLSearchParams();
+  for (const [key, id] of [
+    ["q", "f-q"],
+    ["month", "f-month"],
+    ["category", "f-category"],
+    ["status", "f-status"],
+  ]) {
+    const value = $(id).value.trim();
+    if (value) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? "?" + query : "";
+}
+function renderFilterOptions() {
+  const category = $("f-category"),
+    status = $("f-status"),
+    chosen = [category.value, status.value];
+  category.replaceChildren(
+    option("", t("allCategories")),
+    option("none", t("noCategory")),
+    ...Object.entries(COPY[lang].categories).map(([k, v]) => option(k, v)),
+  );
+  status.replaceChildren(
+    option("", t("anyStatus")),
+    ...Object.entries(COPY[lang].docStatuses).map(([k, v]) => option(k, v)),
+  );
+  [category.value, status.value] = chosen;
+}
 async function loadDocs() {
   if (!state.org) return;
-  state.docs = await request(base() + "/documents");
+  const finance = FINANCE_ROLES.includes(state.role);
+  $("archive-filters").hidden = !finance;
+  if (finance) {
+    const body = await request(base() + "/archive" + archiveQuery());
+    state.docs = body.items;
+    state.summary = body.summary;
+  } else {
+    state.docs = await request(base() + "/documents");
+    state.summary = null;
+  }
   renderDocs();
+}
+function renderSummary() {
+  const box = $("archive-summary"),
+    sum = state.summary;
+  box.hidden = !sum;
+  if (!sum) return;
+  const parts = [fill(t("archiveCount"), { count: sum.count })];
+  for (const [currency, b] of Object.entries(sum.by_currency))
+    parts.push(
+      fill(t("archiveTotal"), {
+        currency,
+        total: money(b.total, currency),
+        tax: money(b.tax, currency),
+      }),
+    );
+  if (sum.without_data)
+    parts.push(fill(t("archiveWithoutData"), { count: sum.without_data }));
+  box.textContent = parts.join(" · ");
+}
+function categorySelect(doc) {
+  const select = document.createElement("select");
+  select.className = "category-select";
+  select.setAttribute("aria-label", t("category") + " · " + doc.filename);
+  select.append(
+    option("", t("noCategory")),
+    ...Object.entries(COPY[lang].categories).map(([k, v]) => option(k, v)),
+  );
+  select.value = doc.category || "";
+  select.onchange = () =>
+    run(async () => {
+      await request(
+        base() + "/documents/" + encodeURIComponent(doc.id) + "/category",
+        json("PUT", { category: select.value || null }),
+      );
+      doc.category = select.value || null;
+      await loadDocs();
+      notice(t("saved"));
+    }, select);
+  return select;
 }
 function renderDocs() {
   const list = $("document-list");
@@ -489,20 +585,44 @@ function renderDocs() {
   for (const doc of state.docs) {
     const row = text("div", "", "document"),
       info = text("div", "");
+    const inv = doc.invoice;
     info.append(
-      text("strong", doc.filename),
+      text("strong", inv?.supplier_name || doc.filename),
       text(
         "small",
-        (COPY[lang].docStatuses[doc.status] || doc.status) +
-          " · " +
-          timestamp(doc.created_at),
+        [
+          inv?.document_number,
+          inv?.issue_date,
+          COPY[lang].docStatuses[doc.status] || doc.status,
+          inv ? doc.filename : timestamp(doc.created_at),
+        ]
+          .filter(Boolean)
+          .join(" · "),
       ),
     );
+    if (inv?.total)
+      info.append(
+        text(
+          "span",
+          money(inv.total, inv.currency) +
+            (inv.tax ? " · DPH " + money(inv.tax, inv.currency) : ""),
+          "doc-amount",
+        ),
+      );
+    const flags = text("div", "", "doc-flags");
+    if (state.summary && !inv)
+      flags.append(text("span", t("noInvoiceData"), "badge neutral"));
+    if (inv && inv.complete === false)
+      flags.append(text("span", t("incompleteData"), "badge warn"));
+    if (doc.possible_duplicates?.length)
+      flags.append(text("span", t("possibleDuplicate"), "badge warn"));
+    if (flags.children.length) info.append(flags);
     row.append(
       info,
       button(t("original"), () => download(doc.id)),
     );
     if (["owner", "accountant"].includes(state.role)) {
+      if (state.summary) row.append(categorySelect(doc));
       row.append(button(t("invoiceData"), () => openExtraction(doc.id)));
       row.append(button(t("requestForDoc"), () => openCreate(doc.id)));
       if (doc.status === "needs_review")
@@ -523,6 +643,7 @@ function renderDocs() {
     }
     list.append(row);
   }
+  renderSummary();
   if (!state.docs.length) empty(list, t("noDocuments"));
 }
 async function download(id) {
@@ -815,6 +936,7 @@ function translate() {
     filter.append(option(s, statusText(s))),
   );
   filter.value = value;
+  renderFilterOptions();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1044,7 +1166,15 @@ $("upload-form").onsubmit = (e) => {
   run(async () => {
     const form = new FormData();
     form.append("file", $("upload-file").files[0]);
-    await request(base() + "/documents", { method: "POST", body: form });
+    try {
+      await request(base() + "/documents", { method: "POST", body: form });
+    } catch (error) {
+      if (error.detail?.code === "duplicate_file") {
+        notice(t("duplicateFile"), true);
+        return;
+      }
+      throw error;
+    }
     $("upload-form").reset();
     await loadDocs();
     notice(t("saved"));
@@ -1069,6 +1199,22 @@ $("extract-request-changes").onclick = () =>
     () => decideFromExtraction("request_changes"),
     $("extract-request-changes"),
   );
+let filterTimer;
+const refilter = () => run(() => loadDocs());
+for (const id of ["f-month", "f-category", "f-status"])
+  $(id).onchange = refilter;
+$("f-q").oninput = () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(refilter, 300);
+};
+$("archive-filters").onsubmit = (e) => {
+  e.preventDefault();
+  refilter();
+};
+$("f-clear").onclick = () => {
+  $("archive-filters").reset();
+  refilter();
+};
 $("tasks-tab").onclick = () => setTab("tasks");
 $("docs-tab").onclick = () => setTab("docs");
 if (

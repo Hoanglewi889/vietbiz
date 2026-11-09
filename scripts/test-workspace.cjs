@@ -281,6 +281,63 @@ const path = require("node:path");
     await page.waitForFunction(
       () => !document.querySelector("#extract-dialog").open,
     );
+    // Digital archive (CR-3): totals, search, categories, duplicate files.
+    const docCount = () => page.locator(".document").count();
+    await waitText("#archive-summary", "2 chứng từ");
+    check(
+      "Archive totals the stored invoices",
+      (await page.locator("#archive-summary").innerText()).includes("Tổng CZK"),
+    );
+    await page.locator("#f-q").fill("Synthetic Wholesale");
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 1);
+    check("Archive search finds the supplier", (await docCount()) === 1);
+    await page.locator(".category-select").first().selectOption("goods");
+    await waitText("#notice", "Đã lưu");
+    await page.locator("#f-clear").click();
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 2);
+    await page.locator("#f-category").selectOption("goods");
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 1);
+    check(
+      "Category filter shows only categorised documents",
+      (await page.locator(".document strong").first().innerText()).includes(
+        "Synthetic Wholesale",
+      ),
+    );
+    await page.locator("#f-clear").click();
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 2);
+    await page
+      .locator("#upload-file")
+      .setInputFiles(path.join(__dirname, "fixtures", "synthetic-isdoc.pdf"));
+    await page.locator("#upload-button").click();
+    await waitText("#notice", "đã được tải lên trước đó");
+    check("Identical file upload is refused", (await docCount()) === 2);
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "Archive view fits a 390 px screen",
+      await page.evaluate(() => {
+        const view = document.querySelector("#docs-view");
+        const edge =
+          view.getBoundingClientRect().right -
+          parseFloat(getComputedStyle(view).paddingRight);
+        const inside = [
+          ...document.querySelectorAll(
+            "#archive-filters input, #archive-filters select, .category-select",
+          ),
+        ].every((el) => el.getBoundingClientRect().right <= edge + 0.5);
+        return inside && document.documentElement.scrollWidth <= innerWidth;
+      }),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "archive-mobile.png"),
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "archive-desktop.png"),
+        fullPage: true,
+      });
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });

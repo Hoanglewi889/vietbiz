@@ -647,6 +647,50 @@ main {
 #upload-form label {
   flex: 1;
 }
+.archive-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px 0 4px;
+}
+.archive-filters label {
+  min-width: 0;
+}
+.archive-filters input,
+.archive-filters select {
+  width: 100%;
+}
+.archive-filters[hidden],
+.archive-summary[hidden] {
+  display: none;
+}
+.archive-summary {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #eef3e4;
+  font-size: 13px;
+  font-weight: 600;
+}
+.doc-amount {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.doc-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.category-select {
+  font-size: 12px;
+  padding: 8px 10px;
+  max-width: 190px;
+}
 .document {
   display: flex;
   align-items: center;
@@ -980,6 +1024,16 @@ label.check {
   }
   .document {
     flex-wrap: wrap;
+  }
+  .archive-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .archive-filters label:first-child {
+    grid-column: 1 / -1;
+  }
+  .category-select {
+    max-width: none;
+    flex: 1 1 100%;
   }
   .document > div {
     flex-basis: 100%;

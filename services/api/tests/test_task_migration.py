@@ -5,6 +5,10 @@ import sys
 
 from test_database import API, migrate
 
+# Columns that existed at 0002; later revisions may only add columns.
+DOC_COLUMNS = ('SELECT id,organization_id,uploader_id,filename,mime,storage_path,sha256,size_bytes,status,'
+               'created_at FROM documents')
+
 
 def test_sprint09_upgrade_preserves_documents_and_pending_invitations(tmp_path):
     path = tmp_path / 'sprint09.db'
@@ -21,12 +25,12 @@ def test_sprint09_upgrade_preserves_documents_and_pending_invitations(tmp_path):
                    "'/synthetic/doc.pdf','synthetic-hash',10,'needs_review','2026-10-01')")
         db.execute("INSERT INTO invitations VALUES ('inv','org','accountant','accountant','owner',"
                    "'pending','2026-10-31','2026-11-07',NULL)")
-        before_doc = db.execute('SELECT * FROM documents').fetchall()
+        before_doc = db.execute(DOC_COLUMNS).fetchall()
         before_inv = db.execute('SELECT * FROM invitations').fetchall()
     assert migrate(path).returncode == 0
     assert migrate(path).returncode == 0
     with sqlite3.connect(path) as db:
-        assert db.execute('SELECT * FROM documents').fetchall() == before_doc
+        assert db.execute(DOC_COLUMNS).fetchall() == before_doc
         assert db.execute('SELECT * FROM invitations').fetchall() == before_inv
         assert db.execute('SELECT COUNT(*) FROM accounting_tasks').fetchone()[0] == 0
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
