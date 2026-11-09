@@ -19,6 +19,8 @@ const state = {
   commentNext: null,
   eventNext: null,
   demo: null,
+  extract: null,
+  extractTicket: 0,
 };
 const retries = new Map();
 const text = (tag, content, className = "") => {
@@ -154,6 +156,7 @@ function resetContext() {
   $("upload-button").disabled = true;
   $("more-tasks").hidden = true;
   $("create-dialog").close();
+  closeExtraction();
   $("create-form").reset();
   $("upload-form").reset();
   $("role-badge").textContent = "";
@@ -500,6 +503,7 @@ function renderDocs() {
       button(t("original"), () => download(doc.id)),
     );
     if (["owner", "accountant"].includes(state.role)) {
+      row.append(button(t("invoiceData"), () => openExtraction(doc.id)));
       row.append(button(t("requestForDoc"), () => openCreate(doc.id)));
       if (doc.status === "needs_review")
         row.append(
@@ -533,6 +537,259 @@ async function download(id) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+/* Invoice data (CR-1): original beside manually entered fields and the VAT Act check. */
+const FIELD_KEYS = [
+  "supplier_name",
+  "supplier_vat_id",
+  "document_number",
+  "subject",
+  "issue_date",
+  "supply_date",
+  "customer_name",
+  "customer_vat_id",
+];
+const OPEN_DOC = ["needs_review", "needs_changes"];
+const decimal = (value) => {
+  const v = value.replace(/\s/g, "").replace(",", ".");
+  return v === "" ? null : v;
+};
+const extractUrl = (id) =>
+  base() + "/documents/" + encodeURIComponent(id) + "/extraction";
+function format(template, detail = {}) {
+  return template.replace(/\{(\w+)\}/g, (_, key) =>
+    key === "line" ? String((detail.line ?? 0) + 1) : String(detail[key] ?? ""),
+  );
+}
+function lineRow(line = {}) {
+  const row = text("div", "", "vat-line");
+  for (const [key, title] of [
+    ["rate", "rate"],
+    ["base", "base"],
+    ["tax", "tax"],
+  ]) {
+    const input = document.createElement("input");
+    input.inputMode = "decimal";
+    input.autocomplete = "off";
+    input.dataset.key = key;
+    input.value = line[key] ?? "";
+    input.disabled = !!state.extract?.locked;
+    row.append(label(t(title), input));
+  }
+  const remove = text("button", "×", "icon-button remove-line");
+  remove.type = "button";
+  remove.setAttribute("aria-label", t("removeLine"));
+  remove.disabled = !!state.extract?.locked;
+  remove.onclick = () => {
+    row.remove();
+    syncLines();
+  };
+  row.append(remove);
+  return row;
+}
+function syncLines() {
+  $("x-add-line").disabled =
+    !!state.extract?.locked || $("x-lines").children.length >= 10;
+}
+function readLines() {
+  return [...$("x-lines").children].map((row) => {
+    const value = (key) => row.querySelector(`[data-key="${key}"]`).value;
+    return { rate: value("rate"), base: value("base"), tax: value("tax") };
+  });
+}
+function renderLines(lines) {
+  $("x-lines").replaceChildren(...lines.map(lineRow));
+  syncLines();
+}
+function fillForm(fields = {}) {
+  for (const key of FIELD_KEYS) $("x-" + key).value = fields[key] ?? "";
+  $("x-total").value = fields.total ?? "";
+  $("x-currency").value = fields.currency || "CZK";
+  $("x-exempt").checked = !!fields.exempt;
+  $("x-reverse_charge").checked = !!fields.reverse_charge;
+  renderLines(fields.lines?.length ? fields.lines : [{}]);
+}
+function readForm() {
+  const fields = {};
+  for (const key of FIELD_KEYS) fields[key] = $("x-" + key).value.trim() || null;
+  fields.total = decimal($("x-total").value);
+  fields.currency = $("x-currency").value;
+  fields.exempt = $("x-exempt").checked;
+  fields.reverse_charge = $("x-reverse_charge").checked;
+  fields.lines = readLines()
+    .map((line) => ({
+      rate: decimal(line.rate),
+      base: decimal(line.base),
+      tax: decimal(line.tax),
+    }))
+    .filter((line) => line.rate || line.base || line.tax);
+  return fields;
+}
+function renderCheck() {
+  const body = $("check-body"),
+    data = state.extract?.data;
+  body.replaceChildren();
+  if (!data) {
+    body.append(text("p", t("noDataYet"), "muted"));
+    return;
+  }
+  const check = data.check,
+    meta = text("div", "", "check-meta");
+  meta.append(
+    text("span", COPY[lang].kinds[check.kind] || check.kind, "badge neutral"),
+    text(
+      "span",
+      t(check.complete ? "checkComplete" : "checkIncomplete"),
+      "badge " + (check.complete ? "ok" : "warn"),
+    ),
+    text(
+      "small",
+      t("revision") + " " + data.version + " · " + timestamp(data.updated_at),
+      "muted",
+    ),
+  );
+  body.append(meta);
+  if (!check.findings.length) return;
+  const list = text("ul", "", "findings");
+  for (const f of check.findings) {
+    const item = text("li", "", f.severity);
+    item.append(
+      text("strong", COPY[lang].severities[f.severity] || f.severity),
+      text("span", format(COPY[lang].findings[f.code] || f.code, f.detail)),
+      text("small", f.basis),
+    );
+    list.append(item);
+  }
+  body.append(list);
+}
+function renderExtractionState() {
+  const x = state.extract,
+    doc = state.docs.find((d) => d.id === x.doc);
+  x.locked = !doc || !OPEN_DOC.includes(doc.status);
+  $("extract-file").textContent = doc
+    ? doc.filename + " · " + (COPY[lang].docStatuses[doc.status] || doc.status)
+    : "";
+  $("extract-form")
+    .querySelectorAll("input, select")
+    .forEach((el) => (el.disabled = x.locked));
+  $("extract-save").disabled = x.locked;
+  const decide = !!doc && doc.status === "needs_review";
+  $("extract-approve").hidden = !decide;
+  $("extract-request-changes").hidden = !decide;
+  $("extract-error").textContent = x.locked ? t("dataLocked") : "";
+  renderLines(readLines());
+  renderCheck();
+}
+async function showPreview(id) {
+  const x = state.extract,
+    doc = state.docs.find((d) => d.id === id),
+    box = $("extract-preview");
+  box.replaceChildren(text("p", "…", "muted"));
+  const blob = await request(
+    base() + "/documents/" + encodeURIComponent(id) + "/original",
+    { blob: true },
+  );
+  if (state.extract !== x) return;
+  x.url = URL.createObjectURL(blob);
+  let view;
+  if (doc?.mime === "application/pdf") {
+    view = document.createElement("iframe");
+    view.title = t("originalPreview") + " · " + doc.filename;
+  } else if (doc?.mime?.startsWith("image/")) {
+    view = document.createElement("img");
+    view.alt = t("originalPreview") + " · " + doc.filename;
+  }
+  if (!view) {
+    box.replaceChildren(text("p", t("noPreview"), "muted"));
+    return;
+  }
+  view.src = x.url;
+  box.replaceChildren(view);
+}
+async function loadExtraction() {
+  const x = state.extract;
+  try {
+    x.data = await request(extractUrl(x.doc));
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    x.data = null;
+  }
+  if (state.extract !== x) return;
+  fillForm(x.data?.fields);
+  x.saved = JSON.stringify(readForm());
+  renderExtractionState();
+}
+const unsavedEdits = (x) => x.saved !== JSON.stringify(readForm());
+async function openExtraction(id) {
+  closeExtraction();
+  const x = (state.extract = {
+    doc: id,
+    data: null,
+    url: "",
+    locked: false,
+    ticket: ++state.extractTicket,
+  });
+  fillForm();
+  x.saved = JSON.stringify(readForm());
+  renderExtractionState();
+  $("extract-dialog").showModal();
+  $("x-supplier_name").focus();
+  await Promise.all([showPreview(id), loadExtraction()]);
+  if (state.extract === x) $("x-supplier_name").focus();
+}
+function closeExtraction() {
+  const x = state.extract;
+  state.extract = null;
+  if (x?.url) URL.revokeObjectURL(x.url);
+  $("extract-preview").replaceChildren();
+  if ($("extract-dialog").open) $("extract-dialog").close();
+}
+async function saveExtraction() {
+  const x = state.extract;
+  $("extract-error").textContent = "";
+  try {
+    const data = await request(
+      extractUrl(x.doc),
+      json("PUT", {
+        version: x.data?.version ?? 0,
+        source: "manual",
+        fields: readForm(),
+      }),
+    );
+    if (state.extract !== x) return;
+    x.data = data;
+    fillForm(data.fields);
+    x.saved = JSON.stringify(readForm());
+    renderExtractionState();
+    notice(t("saved"));
+  } catch (error) {
+    if (error.status === 409 && state.extract === x) {
+      await loadDocs();
+      await loadExtraction();
+      $("extract-error").textContent = t("dataConflict");
+      return;
+    }
+    if (state.extract === x) $("extract-error").textContent = message(error);
+    throw error;
+  }
+}
+async function decideFromExtraction(decision) {
+  const x = state.extract;
+  // A decision locks the data, so unsaved edits would be lost silently.
+  if (unsavedEdits(x)) {
+    $("extract-error").textContent = t("saveBeforeDecision");
+    return;
+  }
+  try {
+    await request(
+      base() + "/documents/" + encodeURIComponent(x.doc) + "/review",
+      json("POST", { decision }),
+    );
+  } finally {
+    await loadDocs();
+    if (state.extract === x) renderExtractionState();
+  }
+  notice(t("saved"));
+}
 function openCreate(doc = "") {
   if (!state.org) throw { messageKey: "chooseCompanyFirst" };
   const sel = $("task-document");
@@ -563,6 +820,7 @@ function translate() {
     renderDocs();
   } else empty($("task-list"), t("startTitle"), t("startText"), "↗");
   renderDetail();
+  if (state.extract) renderExtractionState();
 }
 function renderDemoRoles() {
   const sel = $("demo-role");
@@ -640,6 +898,26 @@ async function seedDemo() {
   const doc = (
     await request(base() + "/documents", { method: "POST", body: form })
   ).id;
+  await request(
+    base() + "/documents/" + doc + "/extraction",
+    json("PUT", {
+      version: 0,
+      source: "manual",
+      fields: {
+        supplier_name: "Velkoobchod Ukázka s.r.o. · DEMO",
+        supplier_vat_id: null,
+        document_number: "DEMO-204",
+        subject: "Potraviny a drogerie (dữ liệu mẫu / ukázka)",
+        issue_date: "2026-10-30",
+        currency: "CZK",
+        total: "3208.00",
+        lines: [
+          { rate: "12", base: "2000.00", tax: "240.00" },
+          { rate: "21", base: "800.00", tax: "168.00" },
+        ],
+      },
+    }),
+  );
   state.user = accountant;
   const date = new Date(),
     due = new Intl.DateTimeFormat("en-CA", {
@@ -769,6 +1047,25 @@ $("upload-form").onsubmit = (e) => {
     notice(t("saved"));
   }, e.submitter);
 };
+$("close-extract").onclick = () => closeExtraction();
+$("extract-dialog").addEventListener("close", () => {
+  if (state.extract) closeExtraction();
+});
+$("x-add-line").onclick = () => {
+  $("x-lines").append(lineRow());
+  syncLines();
+};
+$("extract-form").onsubmit = (e) => {
+  e.preventDefault();
+  run(saveExtraction, $("extract-save"));
+};
+$("extract-approve").onclick = () =>
+  run(() => decideFromExtraction("approve"), $("extract-approve"));
+$("extract-request-changes").onclick = () =>
+  run(
+    () => decideFromExtraction("request_changes"),
+    $("extract-request-changes"),
+  );
 $("tasks-tab").onclick = () => setTab("tasks");
 $("docs-tab").onclick = () => setTab("docs");
 if (

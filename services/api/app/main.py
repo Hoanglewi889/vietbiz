@@ -217,6 +217,9 @@ app.include_router(news_router)
 from .tasks import build_router
 app.include_router(build_router(current_user, authorize))
 
+from .extractions import build_router as build_extraction_router
+app.include_router(build_extraction_router(current_user, authorize, event))
+
 # Serve the local demo from the API origin; API authorization is unchanged.
 from fastapi.staticfiles import StaticFiles
 web_root = Path(__file__).resolve().parents[3] / 'apps' / 'accountant-web'

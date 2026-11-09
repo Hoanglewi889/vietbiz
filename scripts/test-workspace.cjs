@@ -141,6 +141,105 @@ const path = require("node:path");
       "Authorized original download works",
       download.suggestedFilename() === "sample-only.png",
     );
+    // Invoice data (CR-1): original beside the fields and the VAT Act check.
+    await page
+      .locator(".document button")
+      .filter({ hasText: "Dữ liệu hóa đơn" })
+      .click();
+    await waitText("#check-body", "Thiếu DIČ người bán");
+    await page.locator("#extract-preview img").waitFor();
+    const checkText = async () => page.locator("#check-body").innerText();
+    check(
+      "Invoice data shows the original beside the fields",
+      (await page.locator("#extract-preview img").count()) === 1,
+    );
+    check(
+      "Seeded receipt is checked as a simplified document",
+      (await checkText()).includes("Hóa đơn đơn giản"),
+    );
+    check(
+      "Missing supplier DIČ cites the VAT Act",
+      (await checkText()).includes("§ 29 odst. 1 písm. b)"),
+    );
+    await page.locator("#x-supplier_vat_id").fill("CZ00000001");
+    await page.locator("#extract-save").click();
+    await waitText("#check-body", "Phiên bản 2");
+    check(
+      "Correcting the field clears the finding in a new revision",
+      (await checkText()).includes("Đủ nội dung bắt buộc"),
+    );
+    const secondTax = page.locator('#x-lines .vat-line:nth-child(2) [data-key="tax"]');
+    await secondTax.fill("170,00");
+    await page.locator("#extract-save").click();
+    await waitText("#check-body", "Tiền thuế dòng 2 không khớp");
+    check(
+      "Czech decimal comma is accepted and a wrong tax is flagged",
+      (await checkText()).includes("hóa đơn ghi 170.00"),
+    );
+    await secondTax.fill("168.00");
+    await page.locator("#extract-save").click();
+    await waitText("#check-body", "Phiên bản 4");
+    await page.locator("#language").selectOption("cs");
+    check(
+      "Invoice check is translated to Czech",
+      (await checkText()).includes("Povinné náležitosti úplné"),
+    );
+    await page.locator("#language").selectOption("vi");
+    const dialogTop = () =>
+      page.evaluate(() => (document.querySelector("#extract-dialog").scrollTop = 0));
+    if (process.env.VIETBIZ_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });
+      await dialogTop();
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "invoice-desktop.png"),
+      });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "Invoice data dialog fits a 390 px screen",
+      await page.evaluate(() => {
+        const d = document.querySelector("#extract-dialog");
+        return (
+          d.scrollWidth <= d.clientWidth + 1 &&
+          document.documentElement.scrollWidth <= innerWidth
+        );
+      }),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR) {
+      await dialogTop();
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "invoice-mobile.png"),
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    // Unsaved edits must not be dropped by a decision (Codex review, PR #3).
+    await page.locator("#x-document_number").fill("DEMO-204-EDITED");
+    await page.locator("#extract-approve").click();
+    await waitText("#extract-error", "Lưu dữ liệu trước");
+    check(
+      "Approving with unsaved edits is blocked",
+      !(await page.locator("#extract-save").isDisabled()) &&
+        (await page.locator("#x-document_number").inputValue()) ===
+          "DEMO-204-EDITED",
+    );
+    await page.locator("#x-document_number").fill("DEMO-204");
+    await page.locator("#extract-approve").click();
+    await waitText("#extract-error", "Chứng từ đã được quyết định");
+    check(
+      "Approving from the dialog locks the invoice data",
+      await page.locator("#extract-save").isDisabled(),
+    );
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(
+      () => !document.querySelector("#extract-dialog").open,
+    );
+    await page.waitForFunction(
+      () => !document.querySelector("#extract-preview img"),
+    );
+    check(
+      "Closing the dialog releases the original preview",
+      (await page.locator("#extract-preview img").count()) === 0,
+    );
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });
