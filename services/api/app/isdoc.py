@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import logging
 import xml.etree.ElementTree as ET
+import zlib
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -23,6 +24,7 @@ MAX_XML_BYTES = 2 * 1024 * 1024
 MAX_ATTACHMENTS = 10
 SUPPORTED_TYPES = {'1', '7'}  # invoice, simplified tax document
 TWO_PLACES = Decimal('0.01')
+MAX_AMOUNT = Decimal('1e12')  # matches the 12 integer digits accepted by the API
 log = logging.getLogger(__name__)
 
 
@@ -57,11 +59,14 @@ def _amount(value):
         return None
     try:
         number = Decimal(value)
+        if not number.is_finite() or abs(number) >= MAX_AMOUNT:
+            raise NotImportable('amount out of range')
+        exact = number.quantize(TWO_PLACES)
     except InvalidOperation:
         raise NotImportable('invalid amount') from None
-    if not number.is_finite() or number != number.quantize(TWO_PLACES):
+    if number != exact:
         raise NotImportable('amount not exact at two decimals')
-    return str(number.quantize(TWO_PLACES))
+    return str(exact)
 
 
 def _rate(value):
@@ -160,25 +165,53 @@ def parse_invoice(xml: bytes) -> dict:
     }
 
 
+def _attachment_bytes(embedded) -> bytes | None:
+    """Return at most MAX_XML_BYTES of one attachment without letting pypdf inflate it.
+
+    Only unfiltered or plain FlateDecode streams are read; inflation stops at the limit.
+    """
+    files = embedded.pdf_object.get('/EF')
+    target = files.get('/UF') or files.get('/F') if files is not None else None
+    stream = target.get_object() if target is not None else None
+    raw = getattr(stream, '_data', None)
+    if not isinstance(raw, bytes) or len(raw) > MAX_XML_BYTES:
+        return None
+    filters = stream.get('/Filter')
+    if stream.get('/DecodeParms') is not None:
+        return None
+    if filters is None:
+        return raw
+    if filters in ('/FlateDecode', ['/FlateDecode']):
+        inflater = zlib.decompressobj()
+        data = inflater.decompress(raw, MAX_XML_BYTES + 1)
+        if len(data) > MAX_XML_BYTES or inflater.unconsumed_tail:
+            return None
+        return data
+    return None
+
+
 def from_pdf(content: bytes) -> dict | None:
-    """Return CR-1 fields from the first importable ISDOC attachment, or None."""
+    """Return CR-1 fields from the first importable ISDOC attachment, or None.
+
+    Attachment metadata is walked lazily: at most MAX_ATTACHMENTS are looked at, and
+    each is read through `_attachment_bytes`, so a small upload cannot inflate into a
+    large amount of memory. Every PDF error means "no import".
+    """
     try:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(content), strict=False)
         if reader.is_encrypted:
             return None
-        attachments = reader.attachments
-    except Exception:  # untrusted PDF: never let parsing break the upload
-        log.info('ISDOC: PDF attachments not readable')
-        return None
-    for index, (name, payloads) in enumerate(sorted(attachments.items())):
-        if index >= MAX_ATTACHMENTS:
-            break
-        for payload in payloads[:1]:
-            if not isinstance(payload, bytes) or len(payload) > MAX_XML_BYTES or b'isdoc.cz/namespace/2013' not in payload:
+        for index, embedded in enumerate(reader.attachment_list):
+            if index >= MAX_ATTACHMENTS:
+                break
+            payload = _attachment_bytes(embedded)
+            if not payload or b'isdoc.cz/namespace/2013' not in payload:
                 continue
             try:
                 return parse_invoice(payload)
             except NotImportable as reason:
-                log.info('ISDOC attachment %r not imported: %s', name[:80], reason)
+                log.info('ISDOC attachment %r not imported: %s', str(embedded.name)[:80], reason)
+    except Exception:  # untrusted PDF: never let parsing break the upload
+        log.info('ISDOC: PDF attachments not readable')
     return None

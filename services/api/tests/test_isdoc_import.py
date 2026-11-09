@@ -163,3 +163,65 @@ def test_first_importable_attachment_wins():
     fields = isdoc.from_pdf(pdf_with([('a.isdoc', invoice_xml(document_type='4')),
                                       ('b.isdoc', invoice_xml())]))
     assert fields is not None and fields['document_number'] == 'SYN-ISDOC-7'
+
+
+# Codex review on PR #4 -------------------------------------------------------
+
+def _pdf_with_raw_attachment(name, stream_dict_extra, raw):
+    """Embed a hand-built stream so tests control its filter and compressed bytes."""
+    from pypdf.generic import ArrayObject, DictionaryObject, NameObject, StreamObject, TextStringObject
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    stream = StreamObject()
+    stream.set_data(raw)
+    stream.update({NameObject('/Type'): NameObject('/EmbeddedFile'), **stream_dict_extra})
+    ref = writer._add_object(stream)
+    spec = DictionaryObject({NameObject('/Type'): NameObject('/Filespec'),
+                             NameObject('/F'): TextStringObject(name),
+                             NameObject('/EF'): DictionaryObject({NameObject('/F'): ref})})
+    names = DictionaryObject({NameObject('/Names'): ArrayObject([TextStringObject(name), writer._add_object(spec)])})
+    writer._root_object[NameObject('/Names')] = DictionaryObject({NameObject('/EmbeddedFiles'): writer._add_object(names)})
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def test_compressed_attachment_is_not_inflated_beyond_the_limit(monkeypatch):
+    import zlib
+
+    from pypdf.generic import NameObject
+    bomb = zlib.compress(b'<' + b'a' * (isdoc.MAX_XML_BYTES * 4), 9)  # a few KB that inflate to 8 MB
+    content = _pdf_with_raw_attachment('bomb.isdoc', {NameObject('/Filter'): NameObject('/FlateDecode')}, bomb)
+    assert len(content) < 100_000
+    import pypdf.generic
+    def forbidden(self, *args, **kwargs):
+        raise AssertionError('attachment must not be fully decoded by pypdf')
+    monkeypatch.setattr(pypdf.generic.StreamObject, 'get_data', forbidden, raising=False)
+    monkeypatch.setattr(pypdf.generic.EncodedStreamObject, 'get_data', forbidden, raising=False)
+    assert isdoc.from_pdf(content) is None
+
+
+def test_attachments_beyond_the_limit_are_never_read(monkeypatch):
+    many = [(f'f{i:02}.txt', b'x') for i in range(isdoc.MAX_ATTACHMENTS + 5)]
+    content = pdf_with(many + [('z.isdoc', invoice_xml())])
+    reads = []
+    real = isdoc._attachment_bytes
+    monkeypatch.setattr(isdoc, '_attachment_bytes', lambda ef: reads.append(ef.name) or real(ef))
+    assert isdoc.from_pdf(content) is None
+    assert len(reads) <= isdoc.MAX_ATTACHMENTS
+
+
+def test_malformed_attachment_stream_does_not_break_upload():
+    from pypdf.generic import NameObject
+    broken = _pdf_with_raw_attachment('x.isdoc', {NameObject('/Filter'): NameObject('/FlateDecode')}, b'not zlib data')
+    assert isdoc.from_pdf(broken) is None
+    owner, _, org = setup()
+    upload(org, owner, broken)
+
+
+def test_amount_beyond_decimal_precision_is_not_importable():
+    huge = invoice_xml(subtotals=[('21', '1000000000000000000000000000000', '168.00')])
+    with pytest.raises(isdoc.NotImportable):
+        isdoc.parse_invoice(huge)
+    owner, _, org = setup()
+    upload(org, owner, pdf_with([('huge.isdoc', huge)]))
