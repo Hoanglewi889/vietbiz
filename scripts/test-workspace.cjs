@@ -212,6 +212,17 @@ const path = require("node:path");
       });
     }
     await page.setViewportSize({ width: 1440, height: 1100 });
+    // Unsaved edits must not be dropped by a decision (Codex review, PR #3).
+    await page.locator("#x-document_number").fill("DEMO-204-EDITED");
+    await page.locator("#extract-approve").click();
+    await waitText("#extract-error", "Lưu dữ liệu trước");
+    check(
+      "Approving with unsaved edits is blocked",
+      !(await page.locator("#extract-save").isDisabled()) &&
+        (await page.locator("#x-document_number").inputValue()) ===
+          "DEMO-204-EDITED",
+    );
+    await page.locator("#x-document_number").fill("DEMO-204");
     await page.locator("#extract-approve").click();
     await waitText("#extract-error", "Chứng từ đã được quyết định");
     check(
