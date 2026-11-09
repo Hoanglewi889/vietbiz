@@ -25,8 +25,9 @@ import segno
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .bank import overdue, payments_for
 from .database import connection
-from .tasks import Key, digest
+from .tasks import Key, digest, today_prague
 from .tax_document_rules import TaxDocument, VatLine, check_tax_document
 
 CENT = Decimal('0.01')
@@ -302,14 +303,14 @@ def _spayd_text(value, limit):
     return ' '.join(plain.replace('*', ' ').split())[:limit]
 
 
-def spayd(invoice):
+def spayd(invoice, amount=None):
     """Czech QR payment ("QR Platba", SPAYD 1.0) for an issued invoice paid to the supplier's IBAN.
 
     Returns None when the invoice cannot be paid by such a code: not issued, not by bank
     transfer, no IBAN on the supplier snapshot, a currency other than CZK or nothing to pay.
     """
     supplier, content, totals = invoice['supplier'], invoice['content'], invoice['totals']
-    amount = Decimal(totals['total'])
+    amount = Decimal(totals['total'] if amount is None else amount)
     if (invoice['status'] != 'issued' or content['payment_method'] != 'bank' or not supplier.get('iban')
             or totals.get('currency', 'CZK') != 'CZK' or not 0 < amount <= Decimal('9999999.99')):
         return None
@@ -396,7 +397,27 @@ def build_router(current_user, authorize, audit):
             rows = db.execute('SELECT * FROM issued_invoices WHERE organization_id=? '
                               'ORDER BY status, series_year DESC, sequence DESC, created_at DESC',
                               (org_id,)).fetchall()
-        return {'items': [_public(r) for r in rows if status is None or r['status'] == status]}
+            payments = payments_for(db, org_id)
+        items = [_public(r) for r in rows if status is None or r['status'] == status]
+        for item in items:
+            # CR-11: money matched from bank statements; drafts have none.
+            item['payment'] = payments.get(item['id'])
+        return {'items': items}
+
+    @router.get('/reminders')
+    def reminders(org_id: str, uid: str = Depends(current_user)):
+        """Overdue invoices per customer, with a QR for what is still owed. Drafts to send by hand."""
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            groups = overdue(db, org_id)
+            for group in groups:
+                for item in group['invoices']:
+                    invoice = _public(load(db, org_id, item['id']))
+                    payload = spayd(invoice, item['remaining'])
+                    item['spayd'] = payload
+                    item['qr'] = segno.make(payload, error='m').svg_data_uri(scale=3, border=2) if payload else None
+            profile = _profile(db, org_id)
+        return {'groups': groups, 'supplier': profile, 'as_of_date': today_prague()}
 
     @router.get('/invoices/{invoice_id}')
     def get_invoice(org_id: str, invoice_id: str, uid: str = Depends(current_user)):

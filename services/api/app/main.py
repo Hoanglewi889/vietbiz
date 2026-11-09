@@ -241,6 +241,8 @@ from .portfolio import build_router as build_portfolio_router
 from .goods import build_router as build_goods_router, import_goods_lines
 app.include_router(build_goods_router(current_user, authorize, event))
 app.include_router(build_portfolio_router(current_user))
+from .bank import build_router as build_bank_router
+app.include_router(build_bank_router(current_user, authorize, event))
 from .vat_threshold import build_router as build_threshold_router
 app.include_router(build_threshold_router(current_user, authorize))
 from .filing_calendar import build_router as build_calendar_router

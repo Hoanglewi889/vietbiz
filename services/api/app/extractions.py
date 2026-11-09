@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
 
-from .archive import learn_category
+from .archive import duplicate_key, learn_category
 from .goods import reconcile_supplier
 from .database import connection
 from .tax_document_rules import TaxDocument, VatLine, check_tax_document
@@ -106,10 +106,34 @@ def record_isdoc(db, org_id, uid, doc_id, raw_fields):
     return True
 
 
-def public(row):
+def possible_duplicates(db, org_id, doc_id, fields):
+    """Other documents of this company that look like the same received invoice (CR-11).
+
+    Same rule as the archive (`archive.duplicate_key`). A warning only: the person decides
+    (a re-sent copy, a correction …). Rejected documents are left out.
+    """
+    key = duplicate_key(fields)
+    if not key:
+        return []
+    out = []
+    for row in db.execute(
+            "SELECT e.document_id, e.fields, d.filename FROM document_extractions e JOIN documents d "
+            'ON d.id=e.document_id AND d.organization_id=e.organization_id WHERE e.organization_id=? '
+            "AND e.document_id<>? AND d.status<>'rejected' AND e.version=(SELECT MAX(version) FROM "
+            'document_extractions x WHERE x.document_id=e.document_id AND x.organization_id=e.organization_id)',
+            (org_id, doc_id)):
+        other = json.loads(row['fields'])
+        if duplicate_key(other) == key:
+            out.append({'document_id': row['document_id'], 'filename': row['filename'],
+                        'document_number': other.get('document_number')})
+    return out
+
+
+def public(row, duplicates=None):
     return {'document_id': row['document_id'], 'version': row['version'], 'source': row['source'],
             'fields': json.loads(row['fields']), 'check': json.loads(row['check_result']),
-            'updated_by': row['actor_id'], 'updated_at': row['created_at']}
+            'updated_by': row['actor_id'], 'updated_at': row['created_at'],
+            'possible_duplicates': duplicates or []}
 
 
 def build_router(current_user, authorize, audit):
@@ -134,9 +158,9 @@ def build_router(current_user, authorize, audit):
         with connection() as db:
             scope(db, uid, org_id, doc_id)
             row = latest(db, org_id, doc_id)
-        if not row:
-            raise HTTPException(404, 'No invoice data yet')
-        return public(row)
+            if not row:
+                raise HTTPException(404, 'No invoice data yet')
+            return public(row, possible_duplicates(db, org_id, doc_id, json.loads(row['fields'])))
 
     @router.put('')
     def save(org_id: str, doc_id: str, body: ExtractionIn, uid: str = Depends(current_user)):
@@ -158,6 +182,7 @@ def build_router(current_user, authorize, audit):
             except IntegrityError:
                 raise HTTPException(409, 'Invoice data changed; reload before saving') from None
             audit(db, org_id, uid, 'document.extraction_saved', doc_id)
-            return public(latest(db, org_id, doc_id))
+            saved = latest(db, org_id, doc_id)
+            return public(saved, possible_duplicates(db, org_id, doc_id, json.loads(saved['fields'])))
 
     return router

@@ -36,6 +36,23 @@ def supplier_key(fields):
     return 'name:' + name if name else None
 
 
+def duplicate_key(fields):
+    """Key under which two received invoices are probably the same one (CR-3, widened in CR-11).
+
+    Same supplier (DIČ, else name) and the same document number, ignoring spaces, dashes and
+    case; without a number, the same supplier, issue date and total.
+    """
+    supplier = supplier_key(fields)
+    if not supplier:
+        return None
+    number = ''.join(ch for ch in (fields.get('document_number') or '').casefold() if ch.isalnum())
+    if number:
+        return (supplier, 'number', number)
+    if fields.get('issue_date') and fields.get('total'):
+        return (supplier, 'day', fields['issue_date'], str(fields['total']))
+    return None
+
+
 def learn_category(db, org_id, uid, doc_id, fields):
     """After a scan, reuse the category this company last gave the same supplier.
 
@@ -152,17 +169,16 @@ def build_router(current_user, authorize, audit):
                 (org_id, org_id)).fetchall()
         invoices = {row['document_id']: _invoice(row) for row in latest}
         items = [{**dict(d), 'invoice': invoices.get(d['id'])} for d in docs]
-        # Same supplier DIČ + document number on several documents: likely the same invoice twice.
-        seen = {}
+        # The same supplier and number (or supplier, date and total) on several documents:
+        # likely the same invoice twice. Rejected documents do not count.
+        keys = {row['document_id']: duplicate_key(json.loads(row['fields'])) for row in latest}
+        decided = {d['id']: d['status'] for d in docs}
+        seen = defaultdict(list)
+        for doc_id, key in keys.items():
+            if key and decided.get(doc_id) != 'rejected':
+                seen[key].append(doc_id)
         for item in items:
-            inv = item['invoice']
-            if inv and inv['supplier_vat_id'] and inv['document_number']:
-                key = (inv['supplier_vat_id'].upper(), inv['document_number'].casefold())
-                seen.setdefault(key, []).append(item['id'])
-        for item in items:
-            inv = item['invoice']
-            key = (inv['supplier_vat_id'].upper(), inv['document_number'].casefold()) \
-                if inv and inv['supplier_vat_id'] and inv['document_number'] else None
+            key = keys.get(item['id'])
             item['possible_duplicates'] = [d for d in seen.get(key, []) if d != item['id']] if key else []
         chosen = [i for i in items if _matches(i, q, month, category, status)]
         return {'items': chosen, 'summary': _summary(chosen), 'categories': list(CATEGORIES)}

@@ -313,3 +313,36 @@ Counts only; no document data leaves its company. No schema change.
   `oldest_unanswered_at` (open tasks whose last client-visible message is the shop's) and
   `median_reply_minutes` (shop message → next accountant reply, last 30 days). Internal notes do
   not count as replies. No schema change.
+
+## CR-11 · Bank statements, payment matching, reminders, duplicate received invoices
+
+- Requested by: the owner ("học hỏi daturo.cz"), 2026-11-09 · Implemented in: `claude/bank-matching`
+- Status: proposed in PR · Depends on: CR-5, CR-10
+
+- Migration `0010_bank_statements`: `bank_imports` (one per file SHA-256 per company) and
+  `bank_transactions` (signed amount, VS/KS/SS, counter-account, `status`
+  `unmatched`/`matched`/`ignored`, exactly one target when matched, `matched_by` `auto`/`manual`,
+  `version`), unique per company by a de-duplication key so overlapping statements add only
+  new movements.
+- `POST /v1/organizations/{org}/bank/imports` (owner, accountant; multipart, ≤ 2 MB, ≤ 5000 rows):
+  GPC/ABO (074/075 records, layout per Fio's GPC description; codes 1/5 money out, 2/4 money
+  in) or a bank CSV found by its header (Czech/English names, `;` or `,`, UTF-8 or CP1250,
+  decimal comma). `409` for a file already imported, `422` when unreadable. Credits in CZK whose
+  VS is an issued invoice's are matched automatically up to its remaining balance (partial
+  payments allowed, overpayments left to a person). Audit `bank.statement_imported`.
+- `GET …/bank/transactions[?status=]` → items with `possible_duplicate_of` (same direction,
+  amount ≥ 100, counterparty, ≤ 3 days) and `suggestions` (invoices by VS or remaining amount;
+  received documents by total), plus `counts`.
+- `POST …/bank/transactions/{id}/match {expected_version, issued_invoice_id | document_id, note?}`,
+  `…/ignore {expected_version, note?}`, `…/unmatch {expected_version}`; `409` on a stale
+  version, `422` for the wrong direction. Audits `bank.matched` / `bank.ignored` / `bank.unmatched`.
+- `GET …/invoices` items gain `payment` (`paid`, `remaining`, `state`
+  `unpaid`/`partial`/`paid`/`overpaid`). `GET …/reminders` → overdue issued invoices with money
+  owed, grouped by customer, with `stage` (`friendly` < 3 days, `first`, `second` ≥ 14,
+  `last` ≥ 30), and a SPAYD/QR for the remaining amount when paid by transfer. Nothing is sent.
+- Received invoices: `possible_duplicates` in the invoice-data response and the archive now share
+  one rule (`archive.duplicate_key`): same supplier (DIČ, else name) and number ignoring spaces,
+  dashes and case; without a number, same supplier, issue date and total; rejected documents
+  left out.
+- Not included: live bank connections (Fio API token, bank e-mail notifications — owner
+  decisions E/H), e-mailing reminders, late-payment interest.

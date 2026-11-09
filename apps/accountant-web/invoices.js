@@ -13,7 +13,7 @@ const CUSTOMER_FIELDS = [
   "payment_method",
   "note",
 ];
-const inv = { profile: null, items: [], editing: null, ticket: 0, threshold: null, printTicket: 0 };
+const inv = { profile: null, items: [], editing: null, ticket: 0, threshold: null, printTicket: 0, reminders: null };
 
 const addDays = (iso, days) => {
   const d = new Date(iso + "T12:00:00Z");
@@ -36,6 +36,9 @@ function resetInvoices() {
   $("billing-error").textContent = "";
   inv.threshold = null;
   $("vat-threshold").hidden = true;
+  inv.reminders = null;
+  $("reminders").hidden = true;
+  $("reminder-list").replaceChildren();
   if ($("print-dialog").open) $("print-dialog").close();
 }
 async function loadInvoices() {
@@ -43,16 +46,19 @@ async function loadInvoices() {
   if ($("invoices-tab").hidden && !$("invoices-view").hidden) setTab("tasks");
   if (!state.org || $("invoices-tab").hidden) return;
   const ticket = ++inv.ticket;
-  const [profile, list, threshold] = await Promise.all([
+  const [profile, list, threshold, reminders] = await Promise.all([
     request(base() + "/billing-profile"),
     request(base() + "/invoices"),
     request(base() + "/vat-threshold"),
+    request(base() + "/reminders"),
   ]);
   if (ticket !== inv.ticket) return;
   inv.profile = profile.profile;
   inv.items = list.items;
   inv.threshold = threshold;
+  inv.reminders = reminders;
   renderThreshold();
+  renderReminders();
   fillProfile();
   renderInvoices();
 }
@@ -275,9 +281,76 @@ function renderThreshold() {
     note,
   );
 }
+// CR-11: reminder drafts for overdue invoices. The app never sends them; the owner copies one.
+function reminderText(group, language) {
+  const supplier = inv.reminders.supplier || {},
+    cz = language === "cs",
+    lines = group.invoices.map((i) =>
+      (cz ? "– faktura " : "– hóa đơn ") + i.number + (cz ? ", splatná " : ", hạn ") + czDate(i.due_date) +
+      (cz ? ", zbývá uhradit " : ", còn phải trả ") + czk(i.remaining) + ", VS " + i.variable_symbol);
+  const account = supplier.iban ? (cz ? "Platbu prosím pošlete na účet " : "Vui lòng chuyển khoản vào tài khoản ") + supplier.iban + "." : "";
+  return (cz
+    ? ["Dobrý den,", "", { friendly: "dovolujeme si připomenout", first: "připomínáme", second: "znovu připomínáme",
+        last: "naposledy připomínáme" }[group.stage] + " úhradu po splatnosti:", ...lines, "",
+      "Celkem k úhradě: " + czk(group.remaining) + ". " + account,
+      "Pokud jste již zaplatili, považujte prosím tuto zprávu za bezpředmětnou.", "", "S pozdravem", supplier.legal_name || ""]
+    : ["Kính gửi quý khách,", "", "Chúng tôi xin nhắc các hóa đơn đã quá hạn thanh toán:", ...lines, "",
+      "Tổng còn phải trả: " + czk(group.remaining) + ". " + account,
+      "Nếu quý khách đã thanh toán, xin bỏ qua thư này.", "", "Trân trọng,", supplier.legal_name || ""]
+  ).join("\n");
+}
+function renderReminders() {
+  const box = $("reminders"),
+    list = $("reminder-list"),
+    data = inv.reminders;
+  list.replaceChildren();
+  box.hidden = !data || !data.groups.length;
+  if (box.hidden) return;
+  for (const group of data.groups) {
+    const card = text("article", "", "reminder-card " + group.stage),
+      head = text("div", "", "reminder-head");
+    head.append(
+      text("strong", group.customer_name + " · " + czk(group.remaining)),
+      text("span", fill(COPY[lang].reminderStages[group.stage], { days: group.days_overdue }), "badge warn"),
+    );
+    const draftBox = document.createElement("textarea");
+    draftBox.readOnly = true;
+    draftBox.rows = 8;
+    draftBox.className = "reminder-text";
+    draftBox.value = reminderText(group, "cs");
+    draftBox.setAttribute("aria-label", t("reminderDraft") + " · " + group.customer_name);
+    const tools = text("div", "", "reminder-tools");
+    for (const language of ["cs", "vi"])
+      tools.append(button(t(language === "cs" ? "reminderCzech" : "reminderVietnamese"), () => {
+        draftBox.value = reminderText(group, language);
+      }, "secondary"));
+    tools.append(button(t("copyText"), async () => {
+      draftBox.select();
+      try {
+        await navigator.clipboard.writeText(draftBox.value);
+      } catch {
+        document.execCommand("copy");
+      }
+      notice(t("copied"));
+    }));
+    const qrs = text("div", "", "reminder-qrs");
+    for (const item of group.invoices)
+      if (item.qr) {
+        const figure = text("figure", ""),
+          img = document.createElement("img");
+        img.src = item.qr;
+        img.alt = "QR Platba " + item.number;
+        figure.append(img, text("figcaption", item.number + " · " + czk(item.remaining)));
+        qrs.append(figure);
+      }
+    card.append(head, draftBox, tools, qrs);
+    list.append(card);
+  }
+}
 function translateInvoices() {
   renderPaymentOptions();
   renderThreshold();
+  renderReminders();
   if (!$("invoice-form").hidden) renderInvoiceLines(readInvoiceLines());
   renderEditorTotals();
   if (state.org) renderInvoices();
@@ -295,7 +368,15 @@ function renderInvoices() {
       text("strong", (item.number || t("draft")) + " · " + c.customer_name),
       text(
         "small",
-        [c.issue_date, t(item.status === "issued" ? "issued" : "draft")].join(" · "),
+        [
+          c.issue_date,
+          t(item.status === "issued" ? "issued" : "draft"),
+          // CR-11: what bank statements say was paid.
+          item.payment
+            ? fill(COPY[lang].paymentStates[item.payment.state], { remaining: czk(item.payment.remaining) })
+            : "",
+        ].filter(Boolean).join(" · "),
+        item.payment ? "pay-" + item.payment.state : "",
       ),
     );
     row.append(info, text("span", money(item.totals.total, "CZK"), "cash-amount"));
