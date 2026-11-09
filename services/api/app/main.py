@@ -164,9 +164,14 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
     isdoc_fields=await run_in_threadpool(read_isdoc,content) if mime=='application/pdf' else None
     did=str(uuid4()); org_dir=FILES / org_id;org_dir.mkdir(exist_ok=True)
     target=org_dir / (did+MIMES[mime]); target.write_bytes(content)
+    digest=sha256(content).hexdigest()
     try:
       with conn() as c:
-        c.execute('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),sha256(content).hexdigest(),len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
+        # Lock the company row so two uploads of the same file cannot both pass the check.
+        c.execute('UPDATE organizations SET id=id WHERE id=?',(org_id,))
+        existing=c.execute('SELECT id FROM documents WHERE organization_id=? AND sha256=?',(org_id,digest)).fetchone()
+        if existing:raise HTTPException(409,{'code':'duplicate_file','document_id':existing['id']})
+        c.execute('INSERT INTO documents(id,organization_id,uploader_id,filename,mime,storage_path,sha256,size_bytes,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),digest,len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
         event(c,org_id,uid,'document.uploaded',did)
         if record_isdoc(c,org_id,uid,did,isdoc_fields):event(c,org_id,uid,'document.extraction_imported',did)
     except Exception:
@@ -223,6 +228,8 @@ app.include_router(build_router(current_user, authorize))
 
 from .extractions import build_router as build_extraction_router, record_isdoc
 from .isdoc import from_pdf as read_isdoc
+from .archive import build_router as build_archive_router
+app.include_router(build_archive_router(current_user, authorize, event))
 app.include_router(build_extraction_router(current_user, authorize, event))
 
 # Serve the local demo from the API origin; API authorization is unchanged.

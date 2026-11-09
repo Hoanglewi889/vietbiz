@@ -163,6 +163,32 @@
             data-i18n="upload"
           ></button>
         </form>
+        <form id="archive-filters" class="archive-filters" hidden>
+          <label
+            ><span data-i18n="archiveSearch"></span
+            ><input
+              id="f-q"
+              type="search"
+              maxlength="100"
+              autocomplete="off"
+          /></label>
+          <label
+            ><span data-i18n="month"></span><input id="f-month" type="month"
+          /></label>
+          <label
+            ><span data-i18n="category"></span><select id="f-category"></select
+          ></label>
+          <label
+            ><span data-i18n="status"></span><select id="f-status"></select
+          ></label>
+          <button
+            type="button"
+            id="f-clear"
+            class="icon-button"
+            data-i18n="clearFilters"
+          ></button>
+        </form>
+        <p id="archive-summary" class="archive-summary" aria-live="polite" hidden></p>
         <div id="document-list" class="document-list"></div>
       </section>
       <footer>

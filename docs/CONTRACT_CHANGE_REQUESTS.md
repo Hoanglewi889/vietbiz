@@ -111,3 +111,33 @@ namespace `http://isdoc.cz/namespace/2013`), the server stores it as revision 1 
   amounts not exact at two decimals, or invalid values mean no import; the upload itself
   is never refused because of the attachment.
 - New dependency: `pypdf>=5,<7` (reads PDF attachments). pip-audit: no known vulnerabilities.
+
+## CR-3 · Digital document archive
+
+- Requested by: Claude, 2026-11-09 · Implemented in: `claude/document-archive`
+- Status: proposed in PR, awaiting Codex review · Depends on: CR-1, CR-2
+
+Replaces paper folders: owners and accountants find any stored invoice by supplier,
+DIČ, number, month, category or status, and see totals for the current filter.
+
+| Method | Path | Roles | Result |
+| --- | --- | --- | --- |
+| `GET` | `/v1/organizations/{org_id}/archive?q=&month=YYYY-MM&category=&status=` | owner, accountant | `200 {items, summary, categories}` · `422` bad filter · `403` |
+| `PUT` | `/v1/organizations/{org_id}/documents/{doc_id}/category` `{"category": "<value>" or null}` | owner, accountant | `200` · `404` other company · `422` unknown value |
+| `POST` | `/v1/organizations/{org_id}/documents` (changed) | owner, employee | new `409 {"detail": {"code": "duplicate_file", "document_id": "…"}}` for the same file (SHA-256) in the same company |
+
+- `items[]`: the existing document fields plus `category`, `invoice` (latest revision:
+  supplier, DIČ, number, issue date, currency, total, summed `tax`, `complete`, `source`,
+  `version`, or `null`) and `possible_duplicates` (other documents with the same supplier
+  DIČ and document number, case-insensitive).
+- `month` uses the invoice issue date, else the upload date. `category=none` = uncategorised.
+- `summary`: `count`, `without_data`, and per-currency `count`/`total`/`tax` as decimal strings.
+- Categories (management overview, not tax classification): `goods`, `supplies`, `utilities`,
+  `rent`, `services`, `equipment`, `transport`, `other`. Audit event `document.categorized`.
+- `GET /documents` is unchanged, so employees still see only the file list.
+- Migration `0005_document_archive`: nullable `documents.category` with a CHECK, index
+  `(organization_id, sha256)`. The upload insert now names its columns.
+- Duplicate files: the upload transaction locks the company row before the SHA-256 check,
+  so concurrent identical uploads keep one (tested with a barrier).
+- Not yet: archive pagination (filtering runs in Python over the company's documents), a
+  retention lock (there is no delete endpoint today), OCR-based duplicate detection.
