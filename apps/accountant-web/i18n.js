@@ -212,6 +212,14 @@ const COPY = {
     printNote: "Hóa đơn được in bằng tiếng Séc cho khách hàng.",
     invoiceIssued: "Đã xuất hóa đơn số {number}",
     print: "In",
+    legalTab: "Pháp lý theo ngành",
+    legalHint:
+      "Các nghĩa vụ chính theo từng ngành, có điều luật và nguồn chính thức cho từng mục.",
+    legalDisclaimer:
+      "Thông tin tham khảo, không phải tư vấn pháp lý hay thuế. Trước khi quyết định, hãy hỏi kế toán, živnostenský úřad hoặc KHS.",
+    allIndustries: "Tất cả ngành",
+    legalSource: "Nguồn",
+    legalChecked: "Kiểm tra lần cuối: {date}",
     categories: {
       goods: "Hàng hóa để bán",
       supplies: "Vật tư, nguyên liệu",
@@ -513,6 +521,13 @@ const COPY = {
     printNote: "Faktura se tiskne v češtině.",
     invoiceIssued: "Faktura {number} vystavena",
     print: "Tisk",
+    legalTab: "Právo podle oboru",
+    legalHint: "Hlavní povinnosti podle oboru, u každé položky předpis a oficiální zdroj.",
+    legalDisclaimer:
+      "Informativní přehled, nejde o právní ani daňové poradenství. Před rozhodnutím se poraďte s účetní, živnostenským úřadem nebo KHS.",
+    allIndustries: "Všechny obory",
+    legalSource: "Zdroj",
+    legalChecked: "Naposledy ověřeno: {date}",
     categories: {
       goods: "Zboží k prodeji",
       supplies: "Materiál, suroviny",

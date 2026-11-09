@@ -8,6 +8,7 @@
     <script src="i18n.js" defer></script>
     <script src="app.js" defer></script>
     <script src="invoices.js" defer></script>
+    <script src="legal.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -96,6 +97,7 @@
         <button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
+        ><button id="legal-tab" class="tab" data-i18n="legalTab"></button
         ><button
           id="invoices-tab"
           class="tab"
@@ -385,6 +387,18 @@
           </div>
         </form>
         <div id="invoice-list" class="invoice-list"></div>
+      </section>
+      <section id="legal-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="legalTab"></h2>
+            <p class="muted" data-i18n="legalHint"></p>
+          </div>
+        </div>
+        <p class="legal-disclaimer" data-i18n="legalDisclaimer"></p>
+        <div id="legal-filters" class="legal-filters" role="group"></div>
+        <div id="legal-grid" class="legal-grid"></div>
+        <p id="legal-checked" class="muted small"></p>
       </section>
       <footer>
         <span>VietBiz · 2026</span><span data-i18n="footer"></span>

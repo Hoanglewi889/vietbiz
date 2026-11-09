@@ -18,10 +18,17 @@ const path = require("node:path");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
+  const webDir = path.join(__dirname, "..", "apps", "accountant-web");
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js"].flatMap((file) =>
+    [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
+      .map((m) => m[1] || m[2]),
+  );
+  const sharedNames = globals.filter((name, i) => globals.indexOf(name) !== i);
   const check = (name, condition) => {
     assert.ok(condition, name);
     checks.push(name);
   };
+  check("Web scripts do not redeclare a global name", sharedNames.length === 0);
   const waitText = async (selector, text) =>
     page.waitForFunction(
       ({ selector, text }) =>
@@ -608,6 +615,52 @@ const path = require("node:path");
         fullPage: true,
       });
     await page.locator("#invoice-cancel").click();
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    // Legal guide per industry (VI/CS, each duty with its source).
+    await page.locator("#legal-tab").click();
+    await page.locator(".legal-card").first().waitFor();
+    const legalLinks = await page.$$eval(".legal-card li", (items) =>
+      items.map((li) => {
+        const a = li.querySelector("a");
+        return a && a.href.startsWith("https://") && a.rel.includes("noopener") && a.target === "_blank";
+      }),
+    );
+    check(
+      "Legal guide shows every industry with a source on each duty",
+      (await page.locator(".legal-card").count()) === 6 &&
+        legalLinks.length >= 20 &&
+        legalLinks.every(Boolean),
+    );
+    await page.locator(".legal-chip").filter({ hasText: "Nail" }).click();
+    check(
+      "Industry filter shows the nail salon rules incl. the 2026 KHS change",
+      (await page.locator(".legal-card").count()) === 1 &&
+        (await page.locator(".legal-card").innerText()).includes("Từ 1/1/2026: chỉ cần báo KHS"),
+    );
+    await page.locator("#language").selectOption("cs");
+    check(
+      "Legal guide is translated to Czech",
+      (await page.locator(".legal-card h3").innerText()).includes("Nehtové studio") &&
+        (await page.locator(".legal-card").innerText()).includes("Od 1. 1. 2026: jen oznámení KHS"),
+    );
+    await page.locator("#language").selectOption("vi");
+    await page.locator(".legal-chip").first().click();
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "legal-desktop.png"),
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "Legal guide fits a 390 px screen",
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth &&
+        [...document.querySelectorAll(".legal-card")].every((c) => c.getBoundingClientRect().right <= innerWidth)),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "legal-mobile.png"),
+        fullPage: true,
+      });
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {

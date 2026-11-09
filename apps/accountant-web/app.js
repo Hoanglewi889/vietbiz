@@ -1202,6 +1202,7 @@ function translate() {
   renderFilterOptions();
   renderCashOptions();
   if (invoicesReady()) translateInvoices();
+  if (typeof renderLegal === "function") renderLegal();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1223,7 +1224,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["tasks", "docs", "cash", "invoices"]) {
+  for (const name of ["tasks", "docs", "cash", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
