@@ -1,6 +1,6 @@
 """CR-9 goods lines, learned goods groups and the monthly goods-intake report. Synthetic data only."""
 from test_api import c, h
-from test_archive import company, record, upload
+from test_archive import FIELDS, company, record, upload
 from test_isdoc_import import pdf_with
 
 from app import isdoc
