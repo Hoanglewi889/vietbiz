@@ -94,6 +94,7 @@
       <div class="workspace-tabs">
         <button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
+        ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
         ><span class="tab-note" data-i18n="scopeNote"></span>
       </div>
       <section id="tasks-view">
@@ -190,6 +191,62 @@
         </form>
         <p id="archive-summary" class="archive-summary" aria-live="polite" hidden></p>
         <div id="document-list" class="document-list"></div>
+      </section>
+      <section id="cash-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="cashbook"></h2>
+            <p class="muted" data-i18n="cashbookHint"></p>
+          </div>
+          <label class="cash-month"
+            ><span data-i18n="month"></span><input id="cash-month" type="month"
+          /></label>
+        </div>
+        <div id="cash-report" class="cash-report" aria-live="polite"></div>
+        <form id="cash-form" class="cash-form" novalidate>
+          <label
+            ><span data-i18n="cashKind"></span
+            ><select id="c-kind">
+              <option value="expense" data-i18n="expense"></option>
+              <option value="income" data-i18n="income"></option></select
+          ></label>
+          <label
+            ><span data-i18n="cashDate"></span><input id="c-date" type="date"
+          /></label>
+          <label
+            ><span data-i18n="amount"></span
+            ><input id="c-amount" inputmode="decimal" autocomplete="off"
+          /></label>
+          <label
+            ><span data-i18n="currency"></span
+            ><select id="c-currency">
+              <option value="CZK">CZK</option>
+              <option value="EUR">EUR</option></select
+          ></label>
+          <label
+            ><span data-i18n="method"></span><select id="c-method"></select
+          ></label>
+          <label
+            ><span data-i18n="category"></span><select id="c-category"></select
+          ></label>
+          <label
+            ><span data-i18n="counterparty"></span
+            ><input id="c-counterparty" maxlength="200" autocomplete="off"
+          /></label>
+          <label class="wide"
+            ><span data-i18n="note"></span
+            ><input id="c-description" maxlength="500" autocomplete="off"
+          /></label>
+          <p id="c-linked" class="muted small wide" hidden></p>
+          <p id="cash-error" class="inline-error wide" role="alert"></p>
+          <button
+            id="cash-submit"
+            class="primary"
+            type="submit"
+            data-i18n="addEntry"
+          ></button>
+        </form>
+        <div id="cash-list" class="cash-list"></div>
       </section>
       <footer>
         <span>VietBiz · 2026</span><span data-i18n="footer"></span>
