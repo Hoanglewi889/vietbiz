@@ -198,6 +198,17 @@ def _vs(row):
     return f"{row['series_year']}{row['sequence']:04d}"
 
 
+def load_movement(db, org_id, tx_id):
+    return db.execute('SELECT id, amount, currency, status, version FROM bank_transactions WHERE id=? '
+                      'AND organization_id=?', (tx_id, org_id)).fetchone()
+
+
+def latest_fields(db, org_id, doc_id):
+    row = db.execute('SELECT fields FROM document_extractions WHERE organization_id=? AND document_id=? '
+                     'ORDER BY version DESC LIMIT 1', (org_id, doc_id)).fetchone()
+    return json.loads(row['fields']) if row else None
+
+
 def payments_for(db, org_id, invoice_ids=None):
     """Matched money per issued invoice: {id: {'paid', 'remaining', 'state'}}."""
     rows = db.execute("SELECT id, totals FROM issued_invoices WHERE organization_id=? AND status='issued'",
@@ -233,18 +244,19 @@ def auto_match(db, org_id, uid, now):
         remaining = Decimal(payments_for(db, org_id, {invoice['id']})[invoice['id']]['remaining'])
         if amount > remaining:
             continue  # an overpayment is a person's call
-        db.execute("UPDATE bank_transactions SET status='matched', issued_invoice_id=?, matched_by='auto', "
-                   'version=version+1, updated_by=?, updated_at=? WHERE id=? AND organization_id=?',
-                   (invoice['id'], uid, now, tx['id'], org_id))
-        matched += 1
+        changed = db.execute("UPDATE bank_transactions SET status='matched', issued_invoice_id=?, matched_by='auto', "
+                             'version=version+1, updated_by=?, updated_at=? WHERE id=? AND organization_id=? '
+                             "AND status='unmatched'", (invoice['id'], uid, now, tx['id'], org_id)).rowcount
+        matched += changed
     return matched
 
 
 def _dedupe_key(row):
     if row['bank_ref']:
-        parts = (row['account'] or '', 'ref', row['bank_ref'], str(row['amount']), row['booked_on'])
+        parts = (row['account'] or '', 'ref', row['bank_ref'], str(row['amount']), row['currency'], row['booked_on'])
     else:
-        parts = (row['account'] or '', row['booked_on'], str(row['amount']), row['vs'] or '',
+        # Codex review, PR #16: the currency is part of a movement's identity (100 CZK ≠ 100 EUR).
+        parts = (row['account'] or '', row['booked_on'], str(row['amount']), row['currency'], row['vs'] or '',
                  row['counter_account'] or '', row['counter_name'] or '', row['message'] or '')
     return sha256('|'.join(parts).encode()).hexdigest()
 
@@ -382,22 +394,28 @@ def build_router(current_user, authorize, audit):
             counts[row['status']] += 1
         return {'items': out, 'counts': dict(counts)}
 
-    def load(db, org_id, tx_id, expected):
-        row = db.execute('SELECT id, amount, currency, status, version FROM bank_transactions WHERE id=? '
-                         'AND organization_id=?', (tx_id, org_id)).fetchone()
+    def load(db, org_id, tx_id):
+        row = load_movement(db, org_id, tx_id)
         if row is None:
             raise HTTPException(404, 'Bank movement not found')
-        if row['version'] != expected:
-            raise HTTPException(409, 'The movement was changed by someone else; reload it')
         return row
+
+    def decide(db, org_id, tx_id, expected, assignments, params, uid, now):
+        """Codex review, PR #16: the version check and the write are one statement, so two
+        decisions made on the same version cannot both succeed; the loser gets 409."""
+        changed = db.execute(f'UPDATE bank_transactions SET {assignments}, version=version+1, updated_by=?, '
+                             'updated_at=? WHERE id=? AND organization_id=? AND version=?',
+                             (*params, uid, now, tx_id, org_id, expected)).rowcount
+        if changed != 1:
+            raise HTTPException(409, 'The movement was changed by someone else; reload it')
+        return dict(db.execute(f'SELECT {COLUMNS_OUT} FROM bank_transactions WHERE id=?', (tx_id,)).fetchone())
 
     @router.post('/transactions/{tx_id}/match')
     def match(org_id: str, tx_id: str, body: MatchIn, uid: str = Depends(current_user)):
         now = datetime.now(timezone.utc).isoformat()
         with connection() as db:
             authorize(db, uid, org_id, roles)
-            db.execute('UPDATE organizations SET id=id WHERE id=?', (org_id,))
-            tx = load(db, org_id, tx_id, body.expected_version)
+            tx = load(db, org_id, tx_id)
             amount = Decimal(tx['amount'])
             if body.issued_invoice_id:
                 if amount <= 0:
@@ -405,42 +423,49 @@ def build_router(current_user, authorize, audit):
                 if not db.execute("SELECT 1 FROM issued_invoices WHERE id=? AND organization_id=? AND status='issued'",
                                   (body.issued_invoice_id, org_id)).fetchone():
                     raise HTTPException(404, 'Invoice not found')
+                # Codex review, PR #16: issued invoices are in CZK and payments are summed as is.
+                if tx['currency'] != 'CZK':
+                    raise HTTPException(422, 'An issued invoice is paid in CZK; this movement is in '
+                                             + tx['currency'])
             else:
                 if amount >= 0:
                     raise HTTPException(422, 'Only money out can pay a received document')
                 if not db.execute('SELECT 1 FROM documents WHERE id=? AND organization_id=?',
                                   (body.document_id, org_id)).fetchone():
                     raise HTTPException(404, 'Document not found')
-            db.execute("UPDATE bank_transactions SET status='matched', issued_invoice_id=?, document_id=?, "
-                       "matched_by='manual', note=?, version=version+1, updated_by=?, updated_at=? "
-                       'WHERE id=? AND organization_id=?',
-                       (body.issued_invoice_id, body.document_id, body.note, uid, now, tx_id, org_id))
+                fields = latest_fields(db, org_id, body.document_id)
+                currency = (fields or {}).get('currency') or 'CZK'
+                if fields and currency != tx['currency']:
+                    raise HTTPException(422, f'The document is in {currency}; this movement is in {tx["currency"]}')
+            row = decide(db, org_id, tx_id, body.expected_version,
+                         "status='matched', issued_invoice_id=?, document_id=?, matched_by='manual', note=?",
+                         (body.issued_invoice_id, body.document_id, body.note), uid, now)
             audit(db, org_id, uid, 'bank.matched', body.document_id)
-            return dict(db.execute(f'SELECT {COLUMNS_OUT} FROM bank_transactions WHERE id=?', (tx_id,)).fetchone())
+            return row
 
     @router.post('/transactions/{tx_id}/ignore')
     def ignore(org_id: str, tx_id: str, body: Decision, uid: str = Depends(current_user)):
         now = datetime.now(timezone.utc).isoformat()
         with connection() as db:
             authorize(db, uid, org_id, roles)
-            load(db, org_id, tx_id, body.expected_version)
-            db.execute("UPDATE bank_transactions SET status='ignored', issued_invoice_id=NULL, document_id=NULL, "
-                       'matched_by=NULL, note=?, version=version+1, updated_by=?, updated_at=? '
-                       'WHERE id=? AND organization_id=?', (body.note, uid, now, tx_id, org_id))
+            load(db, org_id, tx_id)
+            row = decide(db, org_id, tx_id, body.expected_version,
+                         "status='ignored', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=?",
+                         (body.note,), uid, now)
             audit(db, org_id, uid, 'bank.ignored', None)
-            return dict(db.execute(f'SELECT {COLUMNS_OUT} FROM bank_transactions WHERE id=?', (tx_id,)).fetchone())
+            return row
 
     @router.post('/transactions/{tx_id}/unmatch')
     def unmatch(org_id: str, tx_id: str, body: Decision, uid: str = Depends(current_user)):
         now = datetime.now(timezone.utc).isoformat()
         with connection() as db:
             authorize(db, uid, org_id, roles)
-            load(db, org_id, tx_id, body.expected_version)
-            db.execute("UPDATE bank_transactions SET status='unmatched', issued_invoice_id=NULL, document_id=NULL, "
-                       'matched_by=NULL, note=NULL, version=version+1, updated_by=?, updated_at=? '
-                       'WHERE id=? AND organization_id=?', (uid, now, tx_id, org_id))
+            load(db, org_id, tx_id)
+            row = decide(db, org_id, tx_id, body.expected_version,
+                         "status='unmatched', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=NULL",
+                         (), uid, now)
             audit(db, org_id, uid, 'bank.unmatched', None)
-            return dict(db.execute(f'SELECT {COLUMNS_OUT} FROM bank_transactions WHERE id=?', (tx_id,)).fetchone())
+            return row
 
     return router
 

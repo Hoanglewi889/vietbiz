@@ -334,8 +334,10 @@ Counts only; no document data leaves its company. No schema change.
   amount ≥ 100, counterparty, ≤ 3 days) and `suggestions` (invoices by VS or remaining amount;
   received documents by total), plus `counts`.
 - `POST …/bank/transactions/{id}/match {expected_version, issued_invoice_id | document_id, note?}`,
-  `…/ignore {expected_version, note?}`, `…/unmatch {expected_version}`; `409` on a stale
-  version, `422` for the wrong direction. Audits `bank.matched` / `bank.ignored` / `bank.unmatched`.
+  `…/ignore {expected_version, note?}`, `…/unmatch {expected_version}`; the version check is part
+  of the update itself (`409` on a stale version, also between read and write), `422` for the
+  wrong direction or a currency other than the invoice's CZK / the document's currency. The
+  de-duplication key includes the currency. Audits `bank.matched` / `bank.ignored` / `bank.unmatched`.
 - `GET …/invoices` items gain `payment` (`paid`, `remaining`, `state`
   `unpaid`/`partial`/`paid`/`overpaid`). `GET …/reminders` → overdue issued invoices with money
   owed, grouped by customer, with `stage` (`friendly` < 3 days, `first`, `second` ≥ 14,

@@ -176,3 +176,55 @@ def test_received_invoice_with_a_known_number_from_the_same_supplier_is_flagged(
     c.post(f'/v1/organizations/{org}/documents/{copy}/review', headers=h(accountant), json={'decision': 'reject'})
     archive = {i['id']: i for i in c.get(f'/v1/organizations/{org}/archive', headers=h(owner)).json()['items']}
     assert archive[first]['possible_duplicates'] == []
+
+
+# Codex review, PR #16 ---------------------------------------------------------
+
+def test_same_day_movements_in_different_currencies_are_both_kept():
+    owner, _, _, org = payer_company()
+    text = ('Datum;Objem;Měna;Název protiúčtu\n'
+            '05.11.2026;100,00;CZK;Synthetic Partner\n05.11.2026;100,00;EUR;Synthetic Partner\n')
+    r = send(org, owner, text.encode(), name='vypis.csv')
+    assert r.json()['added'] == 2 and r.json()['already_known'] == 0
+
+
+def test_a_foreign_currency_movement_cannot_pay_a_czk_invoice_or_another_currency_document():
+    owner, accountant, _, org = payer_company()
+    invoice = issued(org, owner)
+    eur_bill = upload(org, owner, b'%PDF-1.4\nSynthetic EUR bill').json()['id']
+    record(org, owner, eur_bill, currency='EUR', total='120.00')
+    text = ('Datum;Objem;Měna;Název protiúčtu\n'
+            '05.11.2026;464,56;EUR;Synthetic Customer\n06.11.2026;-120,00;CZK;Synthetic EUR supplier\n')
+    send(org, owner, text.encode(), name='vypis.csv')
+    items = {i['currency']: i for i in movements(org, owner)['items']}
+
+    def match(tx, **target):
+        return c.post(url(org, f"/bank/transactions/{tx['id']}/match"), headers=h(accountant),
+                      json={'expected_version': tx['version'], **target})
+
+    assert match(items['EUR'], issued_invoice_id=invoice['id']).status_code == 422
+    assert match(items['CZK'], document_id=eur_bill).status_code == 422
+    pay = {i['id']: i['payment'] for i in c.get(url(org, '/invoices'), headers=h(owner)).json()['items']}
+    assert pay[invoice['id']]['state'] == 'unpaid'
+
+
+def test_a_decision_on_a_version_changed_after_reading_it_is_refused(monkeypatch):
+    """Two editors read version 1; the other one's write lands between this read and write."""
+    owner, accountant, _, org = payer_company()
+    send(org, owner, gpc(gpc_075(1500, '1', ref='41')))
+    tx = movements(org, owner)['items'][0]
+    real = bank.load_movement
+
+    def read_then_lose_the_race(db, org_id, tx_id):
+        row = real(db, org_id, tx_id)
+        db.execute("UPDATE bank_transactions SET status='ignored', note='other editor', version=version+1 "
+                   'WHERE id=?', (tx_id,))
+        return row
+
+    monkeypatch.setattr(bank, 'load_movement', read_then_lose_the_race)
+    r = c.post(url(org, f"/bank/transactions/{tx['id']}/unmatch"), headers=h(accountant), json={'expected_version': 1})
+    assert r.status_code == 409
+    monkeypatch.undo()
+    after = movements(org, owner)['items'][0]
+    # The rejected request rolled back with its transaction, so the stored decision is unchanged.
+    assert (after['status'], after['version']) == ('unmatched', 1)
