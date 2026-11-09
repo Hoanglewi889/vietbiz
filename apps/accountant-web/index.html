@@ -11,6 +11,7 @@
     <script src="legal.js" defer></script>
     <script src="portfolio.js" defer></script>
     <script src="suppliers.js" defer></script>
+    <script src="filing.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -410,6 +411,31 @@
           </div>
         </div>
         <div id="portfolio-list" class="portfolio-list" aria-live="polite"></div>
+        <div class="filing-grid">
+          <section class="filing-calendar" aria-labelledby="deadline-heading">
+            <h3 id="deadline-heading" data-i18n="deadlineHeading"></h3>
+            <p class="muted" data-i18n="deadlineHint"></p>
+            <p id="profiles-missing" class="profiles-missing" hidden></p>
+            <div id="deadline-list" class="deadline-list" aria-live="polite"></div>
+          </section>
+          <form id="profile-form" class="profile-form" aria-labelledby="profile-heading">
+            <h3 id="profile-heading" data-i18n="profileHeading"></h3>
+            <p class="muted" data-i18n="profileHint"></p>
+            <label><span data-i18n="company"></span><select id="profile-org"></select></label>
+            <label><span data-i18n="legalForm"></span><select id="profile-form-legal"></select></label>
+            <label><span data-i18n="industry"></span><select id="profile-industry"></select></label>
+            <label><span data-i18n="vatStatusLabel"></span><select id="profile-vat"></select></label>
+            <div id="profile-osvc-fields">
+              <label><span data-i18n="osvcActivityLabel"></span><select id="profile-activity"></select></label>
+              <label><span data-i18n="flatTaxLabel"></span><select id="profile-band"></select></label>
+              <label><span data-i18n="healthInsurer"></span><input id="profile-insurer" maxlength="80" placeholder="VZP, OZP, ČPZP…" /></label>
+            </div>
+            <label class="check"><input id="profile-employees" type="checkbox" /><span data-i18n="hasEmployees"></span></label>
+            <label class="check"><input id="profile-adviser" type="checkbox" /><span data-i18n="taxAdviser"></span></label>
+            <p id="profile-status" class="muted" aria-live="polite"></p>
+            <button id="profile-save" class="primary" type="submit" data-i18n="saveProfile"></button>
+          </form>
+        </div>
       </section>
       <section id="legal-view" class="panel" hidden>
         <div class="section-heading">

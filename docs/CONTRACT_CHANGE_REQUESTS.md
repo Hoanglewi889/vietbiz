@@ -235,3 +235,32 @@ Counts only; no document data leaves its company. No schema change.
   `documents`, `last_date`, `totals` per currency (`total`, `tax`), most used `category`,
   `months` (CZK totals per `YYYY-MM`). Sorted by CZK total. Uses each document's latest revision;
   documents without invoice data are skipped. No schema change.
+
+## CR-8 · Client profiles and filing calendar
+
+- Requested by: the owner (VI: "OSVČ cần khai báo gì, ở đâu"), 2026-11-09 · Implemented in: `claude/client-profiles`
+- Status: proposed in PR · Depends on: CR-6
+
+- Migration `0008_client_profiles`: one row per company — `legal_form` (`osvc`/`sro`), `industry`
+  (the legal-guide ids + `other`), `vat_status` (`none`/`monthly`/`quarterly`/`identified`),
+  `has_employees`, `osvc_activity` (`main`/`secondary`, OSVČ only), `flat_tax_band` (1–3, only an
+  OSVČ that is not registered for VAT, § 7a ZDP), `tax_adviser`, `health_insurer`, `version`.
+- `GET|PUT /v1/organizations/{org_id}/client-profile` (owner, accountant). `PUT` takes
+  `expected_version` (`null` to create) and answers `409` when another editor saved first; the
+  company row is locked for the check. Audit `client_profile.updated`.
+- `GET /v1/organizations/{org_id}/deadlines?days=1..400` and `GET /v1/deadlines?days=` (every
+  company where the user is accountant or owner, plus `profiles_missing`). Items: `code`,
+  `due_date`, `period`, `office`, `moved_from`, `conditional`, `amount` (`value`, `currency`,
+  `kind`, `status: reported`, `source`) and `source`. Computed on request, never stored.
+- Rules: VAT return and control statement on the 25th (control statement monthly for an s.r.o.
+  even with a quarterly VAT period), payroll on the 20th of the next month, flat tax on the 20th,
+  flat-tax notice by 10 January, OSVČ advances (social by month end, health by the 8th), OSVČ
+  return 1 May / 1 July with an adviser and the overviews one month later (ČSSZ from the
+  statutory day, insurers from the shifted one), s.r.o. return, EET 2.0 start for in-person
+  sales. Tax deadlines on a weekend or Czech holiday move to the next working day (§ 33(4) DŘ);
+  insurance advances stay on the statutory day. Checked against the published 2026 calendar.
+- Amounts are minimums for 2026 and 2027 from secondary sources, labelled `reported` with the
+  source; unknown years have no amount. `GET /v1/portfolio` adds `profile_missing` and
+  `next_deadline` (`code`, `due_date`, `period`, within 30 days).
+- Not included: income-tax advances (depend on last year's tax), EU sales lists, road tax,
+  employer annual returns, filing anything on the client's behalf.
