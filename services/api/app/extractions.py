@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from sqlalchemy.exc import IntegrityError
 
 from .archive import learn_category
+from .goods import reconcile_supplier
 from .database import connection
 from .tax_document_rules import TaxDocument, VatLine, check_tax_document
 
@@ -88,6 +89,8 @@ def _insert(db, org_id, doc_id, uid, version, source, fields: 'FieldsIn', check)
                 datetime.now(timezone.utc).isoformat()))
     # After a scan or edit: same supplier as before -> same category (company's own history only).
     learn_category(db, org_id, uid, doc_id, fields.model_dump(mode='json'))
+    # A corrected supplier moves the document's goods lines with it (CR-9).
+    reconcile_supplier(db, org_id, uid, doc_id, fields.model_dump(mode='json'))
 
 
 def record_isdoc(db, org_id, uid, doc_id, raw_fields):

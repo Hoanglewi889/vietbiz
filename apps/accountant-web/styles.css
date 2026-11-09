@@ -1629,3 +1629,15 @@ label.check {
 #profile-osvc-fields[hidden] { display: none; }
 .portfolio-stat.deadline { font-weight: 600; }
 @media (max-width: 560px) { .deadline-row { grid-template-columns: 1fr; } }
+
+/* CR-9 goods lines and monthly goods intake */
+.goods-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.goods-section[hidden] { display: none; }
+#goods-paste { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+.goods-scroll { overflow-x: auto; }
+.goods-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.goods-table th, .goods-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.goods-table td:nth-child(4), .goods-table td:nth-child(5), .goods-table td:nth-child(7) { text-align: right; white-space: nowrap; }
+.goods-table tr.flagged td { background: #fbefe9; }
+.goods-findings { margin: 0; padding-left: 18px; color: var(--danger); }
+.goods-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

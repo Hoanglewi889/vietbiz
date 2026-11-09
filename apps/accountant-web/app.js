@@ -186,6 +186,7 @@ function resetContext() {
   if (invoicesReady()) resetInvoices();
   if (typeof resetPortfolio === "function") resetPortfolio();
   if (typeof resetSuppliers === "function") resetSuppliers();
+  if (typeof resetGoods === "function") resetGoods();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
@@ -575,6 +576,7 @@ async function loadDocs() {
   state.summary = archive ? archive.summary : null;
   renderDocs();
   if (typeof loadSuppliers === "function") loadSuppliers(finance).catch(() => {});
+  if (typeof loadGoods === "function") loadGoods(finance).catch(() => {});
 }
 function renderSummary() {
   const box = $("archive-summary"),
@@ -1070,6 +1072,7 @@ function renderExtractionState() {
   $("x-source").classList.toggle("imported", imported);
   renderLines(readLines());
   renderCheck();
+  if (typeof renderGoodsLines === "function" && goods.doc === x.doc) renderGoodsLines();
 }
 async function showPreview(id) {
   const x = state.extract,
@@ -1125,7 +1128,11 @@ async function openExtraction(id) {
   renderExtractionState();
   $("extract-dialog").showModal();
   $("x-supplier_name").focus();
-  await Promise.all([showPreview(id), loadExtraction()]);
+  await Promise.all([
+    showPreview(id),
+    loadExtraction(),
+    typeof loadGoodsLines === "function" ? loadGoodsLines() : null,
+  ]);
   if (state.extract === x) $("x-supplier_name").focus();
 }
 function closeExtraction() {
@@ -1134,6 +1141,7 @@ function closeExtraction() {
   if (x?.url) URL.revokeObjectURL(x.url);
   $("extract-preview").replaceChildren();
   if ($("extract-dialog").open) $("extract-dialog").close();
+  if (typeof resetGoodsLines === "function") resetGoodsLines();
 }
 async function saveExtraction() {
   const x = state.extract;
@@ -1211,6 +1219,7 @@ function translate() {
   if (typeof renderLegal === "function") renderLegal();
   if (typeof renderPortfolio === "function") renderPortfolio();
   if (typeof renderSuppliers === "function") renderSuppliers();
+  if (typeof renderGoods === "function") renderGoods();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();

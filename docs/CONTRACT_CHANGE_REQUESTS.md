@@ -264,3 +264,31 @@ Counts only; no document data leaves its company. No schema change.
   `next_deadline` (`code`, `due_date`, `period`, within 30 days).
 - Not included: income-tax advances (depend on last year's tax), EU sales lists, road tax,
   employer annual returns, filing anything on the client's behalf.
+
+## CR-9 · Goods lines and monthly goods intake
+
+- Requested by: the owner (photo of a wholesale invoice as an example; the photo itself is not
+  stored anywhere), 2026-11-09 · Implemented in: `claude/goods-lines`
+- Status: proposed in PR · Depends on: CR-1 (invoice data), CR-7 (supplier key)
+
+- Migration `0009_document_lines`: `document_line_sets` (one versioned set per document with its
+  `supplier_key` and `source` `manual`/`isdoc`), `document_lines` (`item_code`, `item_key`, `name`,
+  `quantity`, `unit`, `unit_price` without VAT, `vat_rate`, `net`, `goods_group`, `group_source`
+  `manual`/`learned`), `goods_catalogue` (company × supplier × item → group).
+- `GET|PUT /v1/organizations/{org}/documents/{doc}/lines` (owner, accountant). `PUT {lines,
+  expected_version}` replaces the set (409 on a stale version, 409 before the invoice header
+  exists); a blank `net` is quantity × price rounded half up. Response adds `net_by_rate` and
+  `findings`: `duplicate_line`, `line_net_mismatch`, `rate_total_mismatch` (lines per VAT rate vs
+  the invoice's VAT bases, 1 Kč tolerance). Audit `document.lines_saved`.
+- `PUT …/lines/{line_no}/group {goods_group}`: manual choice, remembered for that supplier's item
+  and applied to the same item's lines without a manual choice in this company (`also_updated`).
+  Never across companies or suppliers. Audit `goods.group_set`.
+- ISDOC upload: goods lines (`InvoicedQuantity`, `UnitPrice`, `LineExtensionAmount`,
+  `ClassifiedTaxCategory/Percent`, `SellersItemIdentification/ID`) are stored with the header;
+  one unusable line drops all of them.
+- `GET /v1/organizations/{org}/goods?month=YYYY-MM|year=YYYY` → `groups` (money per currency,
+  quantity per unit, lines), `suppliers` (CZK per group), `top_items` (20), `months` (CZK per
+  group), `documents`, `uncategorised_lines`. By supply date, else issue date; rejected
+  documents left out.
+- Not included: reading lines from a photo (needs an AI service — owner decision A), stock levels,
+  sale prices / margins.

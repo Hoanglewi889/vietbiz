@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -264,6 +264,39 @@ const path = require("node:path");
     await secondTax.fill("168.00");
     await page.locator("#extract-save").click();
     await waitText("#check-body", "Phiên bản 4");
+    // CR-9: goods lines pasted from a spreadsheet, checked against the VAT bases, grouped.
+    await page.locator("#goods-section:not([hidden])").waitFor();
+    await page.locator("#goods-paste").fill("SYN-1;Pivo 0,5 l;24;ks;25,00;21;600,00\nincomplete row");
+    await page.locator("#goods-save").click();
+    await waitText("#goods-error", "Dòng 2 chưa đủ cột");
+    check("A pasted row with missing columns is named before saving", (await page.locator(".goods-table tr").count()) === 0);
+    await page.locator("#goods-paste").fill(
+      [
+        "SYN-1\tSynthetic pivo 0,5 l (24)\t24\tks\t25,00\t21\t600,00",
+        "SYN-2\tSynthetic limonáda\t10\tks\t20,00\t21\t",
+        "SYN-3\tSynthetic tyčinka (40)\t40\tks\t25,00\t12\t1 000,00",
+        "SYN-3\tSynthetic tyčinka (40)\t40\tks\t25,00\t12\t1 000,00",
+      ].join("\n"),
+    );
+    await page.locator("#goods-save").click();
+    await waitText("#goods-status", "4 dòng · phiên bản 1");
+    const goodsText = await page.locator("#goods-section").innerText();
+    check(
+      "Goods lines keep quantity, price and VAT, with the net computed when blank",
+      (await page.locator(".goods-table tr").count()) === 5 &&
+        goodsText.includes("10 ks") &&
+        goodsText.includes("200,00"),
+    );
+    check(
+      "Repeated lines are flagged and line totals match the invoice's VAT bases",
+      goodsText.includes("Dòng 3, 4 giống hệt nhau") && !goodsText.includes("tổng các dòng"),
+    );
+    await page.locator(".goods-table tr").nth(1).locator("select").selectOption("beer");
+    await waitText("#notice", "Đã lưu");
+    check(
+      "A goods group is chosen per line",
+      (await page.locator(".goods-table tr").nth(1).locator("select").inputValue()) === "beer",
+    );
     await page.locator("#language").selectOption("cs");
     check(
       "Invoice check is translated to Czech",
@@ -394,6 +427,16 @@ const path = require("node:path");
       (await page.locator(".document strong").first().innerText()).includes(
         "Synthetic Wholesale",
       ),
+    );
+    await page.locator("#goods-month").fill("2026-10");
+    await waitText("#goods-groups", "Bia");
+    const goodsReport = await page.locator("#goods-panel").innerText();
+    check(
+      "Monthly goods intake shows groups with money and quantity, and the top items",
+      goodsReport.includes("24 ks") &&
+        goodsReport.includes("Chưa xếp nhóm") &&
+        goodsReport.includes("Synthetic tyčinka (40)") &&
+        goodsReport.includes("1 hóa đơn có dòng hàng"),
     );
     await page.locator("#f-clear").click();
     await page.waitForFunction(() => document.querySelectorAll(".document").length === 2);
