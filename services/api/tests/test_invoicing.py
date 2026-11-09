@@ -188,3 +188,24 @@ def test_only_finance_roles_of_the_company_see_invoices():
     for path in (f'/invoices/{iid}', f'/invoices/{iid}/isdoc'):
         assert c.get(url(other_org, path), headers=h(other_owner)).status_code == 404
     assert issue(other_org, other_owner, iid).status_code == 404
+
+
+def test_isdoc_line_taxes_add_up_to_the_tax_per_rate():
+    """Codex review, PR #7: 2 × 0.03 at 21 % is 0.01 tax per rate, not 0.01 per line."""
+    import xml.etree.ElementTree as ET
+    from decimal import Decimal
+    owner, _, _, org = payer_company()
+    tiny = [{'description': f'Synthetic item {n}', 'quantity': '1', 'unit': 'ks', 'unit_price': '0.03',
+             'vat_rate': '21'} for n in (1, 2)] + [{**LINES[1], 'quantity': '1', 'unit_price': '0.05'}] * 3 \
+        + [{**LINES[1], 'quantity': '1', 'unit_price': '0.04', 'vat_rate': '12'}] * 4
+    iid = draft(org, owner, lines=tiny).json()['id']
+    totals = issue(org, owner, iid).json()['totals']
+    assert totals['rates'] == [{'rate': '21', 'base': '0.06', 'tax': '0.01'}, {'rate': '12', 'base': '0.31', 'tax': '0.04'}]
+    root = ET.fromstring(c.get(url(org, f'/invoices/{iid}/isdoc'), headers=h(owner)).content)
+    ns = {'i': 'http://isdoc.cz/namespace/2013'}
+    lines = root.findall('i:InvoiceLines/i:InvoiceLine', ns)
+    tax = sum(Decimal(n.findtext('i:LineExtensionTaxAmount', namespaces=ns)) for n in lines)
+    gross = sum(Decimal(n.findtext('i:LineExtensionAmountTaxInclusive', namespaces=ns)) for n in lines)
+    assert tax == Decimal(totals['tax']) == Decimal('0.05')
+    assert gross == Decimal(root.findtext('i:LegalMonetaryTotal/i:TaxInclusiveAmount', namespaces=ns)) == Decimal('0.42')
+    assert all(Decimal(n.findtext('i:LineExtensionTaxAmount', namespaces=ns)) >= 0 for n in lines)

@@ -171,6 +171,28 @@ def _findings(result):
              'detail': {k: str(v) for k, v in f.detail.items()}} for f in result.findings]
 
 
+def line_taxes(totals):
+    """Tax per line that sums exactly to the tax per rate (§ 37 rounds per rate, not per line).
+
+    Each line is rounded on its own; the rate's rounding residual is then spread one haléř at
+    a time over its lines, largest first, never taking a line below zero.
+    """
+    payer = totals['vat_payer']
+    taxes = [(_cents(Decimal(line['net']) * Decimal(line['vat_rate']) / 100)
+              if payer and line['vat_rate'] else Decimal('0.00')) for line in totals['lines']]
+    for r in totals['rates']:
+        members = sorted((i for i, line in enumerate(totals['lines']) if payer and line['vat_rate'] == r['rate']),
+                         key=lambda i: -Decimal(totals['lines'][i]['net']))
+        residual = Decimal(r['tax']) - sum((taxes[i] for i in members), Decimal('0'))
+        step = CENT if residual > 0 else -CENT
+        while residual and members:
+            for i in members:
+                if residual and taxes[i] + step >= 0:
+                    taxes[i] += step
+                    residual -= step
+    return taxes
+
+
 def isdoc_xml(invoice):
     """ISDOC 6.0.2 invoice (DocumentType 1) for an issued invoice, elements in schema order."""
     ET.register_namespace('', ISDOC_NS)
@@ -216,10 +238,9 @@ def isdoc_xml(invoice):
     party(el(root, 'AccountingCustomerParty'), content['customer_name'], content['customer_address'],
           content['customer_ico'], content['customer_dic'])
     lines = el(root, 'InvoiceLines')
-    for index, line in enumerate(totals['lines'], start=1):
+    for index, (line, line_tax) in enumerate(zip(totals['lines'], line_taxes(totals), strict=True), start=1):
         rate = Decimal(line['vat_rate'] or 0) if payer else Decimal(0)
         net = Decimal(line['net'])
-        line_tax = _cents(net * rate / 100)
         node = el(lines, 'InvoiceLine')
         el(node, 'ID', index)
         el(node, 'InvoicedQuantity', line['quantity'], unitCode=line['unit'])
