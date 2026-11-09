@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -59,6 +59,33 @@ const path = require("node:path");
     );
     await page.locator("#demo").click();
     await waitText("#notice", "Dữ liệu mẫu sẵn sàng");
+    // Accountant portfolio (CR-6): every client company, urgent first, one click to open.
+    // Let the demo finish loading (three tasks, first one open) before switching views.
+    await page.waitForFunction(() => document.querySelectorAll(".task-item").length === 3);
+    await page.locator("#portfolio-tab:not([hidden])").waitFor();
+    await page.locator("#portfolio-tab").click();
+    await page.locator(".portfolio-row").first().waitFor();
+    const firstClient = await page.locator(".portfolio-row").first().innerText();
+    check(
+      "Accountant sees the client portfolio with work counts",
+      firstClient.includes("Potraviny Vltava") && firstClient.includes("Chờ duyệt") && firstClient.includes("Quá hạn"),
+    );
+    await page.locator(".portfolio-row").first().getByRole("button", { name: "Mở công ty" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#portfolio-view").hidden &&
+        document.querySelector("#org").value !== "" &&
+        // The demo company has documents to review, so the client opens on its documents.
+        !document.querySelector("#docs-view").hidden,
+    );
+    check(
+      "Opening a client switches to its workspace",
+      (await page.locator("#org").inputValue()) !== "" &&
+        (await page.locator("#docs-view").isVisible()),
+    );
+    await page.locator("#tasks-tab").click();
+    await page.waitForFunction(() => document.querySelectorAll(".task-item").length === 3);
+    await chooseFirst();
     check(
       "Sample workflow creates three tasks",
       (await page.locator(".task-item").count()) === 3,
@@ -428,6 +455,8 @@ const path = require("node:path");
     await page.locator("#cash-submit").click();
     await page.waitForFunction(() => document.querySelector("#c-amount").value === "");
     await page.unroute(/\/cashbook$/);
+    // The list reloads after the form clears; wait for it before counting rows.
+    await waitText("#cash-list", "Synthetic retry");
     check(
       "A retried payment after a lost response is booked once",
       (await page.locator(".cash-entry").filter({ hasText: "Synthetic retry" }).count()) === 1,
@@ -642,8 +671,8 @@ const path = require("node:path");
     );
     check(
       "Legal guide shows every industry with a source on each duty",
-      (await page.locator(".legal-card").count()) === 11 &&
-        legalLinks.length >= 38 &&
+      (await page.locator(".legal-card").count()) === 12 &&
+        legalLinks.length >= 43 &&
         legalLinks.every(Boolean),
     );
     // Codex review, PR #8: SZPI supervises restaurants since 2025; the health card was abolished in 2023.
@@ -661,7 +690,8 @@ const path = require("node:path");
         (await cardText("herbal")).includes("12/11/2025") &&
         (await cardText("drogerie")).includes("CPNP") &&
         (await cardText("electronics")).includes("400 m²") &&
-        (await cardText("textile")).includes("thành phần sợi"),
+        (await cardText("textile")).includes("thành phần sợi") &&
+        (await cardText("import")).includes("326 000 Kč"),
     );
     await page.locator(".legal-chip").filter({ hasText: "Nail" }).click();
     check(
@@ -730,6 +760,12 @@ const path = require("node:path");
     check(
       "Deselecting company clears financial summary",
       (await page.locator("#metric-active").innerText()) === "—",
+    );
+    // Codex review, PR #11: a reset context must not keep another identity's client list.
+    check(
+      "Resetting the context clears and hides the portfolio",
+      (await page.locator("#portfolio-tab").isHidden()) &&
+        (await page.locator(".portfolio-row").count()) === 0,
     );
     check("No browser JavaScript errors", errors.length === 0);
     const report = {
