@@ -56,18 +56,23 @@ function renderSuppliers() {
     );
   }
   if (!data.items.length) list.append(text("p", t("noSupplierData"), "muted small"));
-  const cats = Object.entries(data.by_category.CZK || {});
-  const catTop = Math.max(1, ...cats.map(([, v]) => Number(v)));
-  for (const [key, value] of cats)
-    bars.append(
-      supplierRow(
-        key === "none" ? t("noCategory") : COPY[lang].categories[key] || key,
-        "",
-        money(value, "CZK"),
-        Number(value) / catTop,
-        key === "none",
-      ),
-    );
+  // One block per currency; amounts in different currencies are never added together.
+  const currencies = Object.entries(data.by_category);
+  for (const [currency, totals] of currencies) {
+    const cats = Object.entries(totals);
+    const catTop = Math.max(1, ...cats.map(([, v]) => Number(v)));
+    if (currencies.length > 1) bars.append(text("small", currency, "muted"));
+    for (const [key, value] of cats)
+      bars.append(
+        supplierRow(
+          key === "none" ? t("noCategory") : COPY[lang].categories[key] || key,
+          "",
+          money(value, currency),
+          Number(value) / catTop,
+          key === "none",
+        ),
+      );
+  }
   if (data.uncategorised_documents)
     bars.append(text("p", fill(t("uncategorisedDocs"), { n: data.uncategorised_documents }), "muted small"));
 }

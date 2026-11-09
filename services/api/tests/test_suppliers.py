@@ -69,3 +69,22 @@ def test_suppliers_breakdown_totals_months_and_categories():
     assert c.get(f'/v1/organizations/{org}/suppliers', headers=h(employee)).status_code == 403
     stranger = user('Supplier stranger')
     assert c.get(f'/v1/organizations/{org}/suppliers', headers=h(stranger)).status_code == 403
+
+
+def test_learning_follows_current_supplier_and_latest_choice():
+    """Codex review, PR #12: superseded supplier data and extraction time must not decide."""
+    owner, _, _, org = company()
+    moved = scanned(org, owner, b'%PDF-1.4\nMoved', **WHOLESALE)
+    categorise(org, owner, moved, 'rent')
+    fix = c.put(f'/v1/organizations/{org}/documents/{moved}/extraction', headers=h(owner),
+                json={'version': 1, 'fields': {**FIELDS, **MARKET}})
+    assert fix.status_code == 200  # supplier corrected from Wholesale to Supermarket
+    fresh = scanned(org, owner, b'%PDF-1.4\nFresh W', **WHOLESALE, document_number='SYN-9')
+    assert category_of(org, owner, fresh) is None  # no current Wholesale history any more
+
+    older = scanned(org, owner, b'%PDF-1.4\nOlder M', **MARKET, document_number='M-1')
+    assert category_of(org, owner, older) == 'rent'  # learnt from the corrected document
+    categorise(org, owner, moved, 'utilities')
+    categorise(org, owner, older, 'supplies')  # the latest choice, on the document with older data
+    newest = scanned(org, owner, b'%PDF-1.4\nNewest M', **MARKET, document_number='M-2')
+    assert category_of(org, owner, newest) == 'supplies'

@@ -49,11 +49,17 @@ def learn_category(db, org_id, uid, doc_id, fields):
                          (doc_id, org_id)).fetchone()
     if current is None or current['category'] is not None:
         return None
+    # Each other document counts with its CURRENT supplier only (latest revision), ordered by
+    # when its category was last chosen, so the company's latest choice wins.
     history = db.execute(
-        'SELECT d.category, e.fields FROM documents d JOIN document_extractions e '
-        'ON e.document_id=d.id AND e.organization_id=d.organization_id '
-        'WHERE d.organization_id=? AND d.id<>? AND d.category IS NOT NULL '
-        'ORDER BY e.created_at DESC', (org_id, doc_id)).fetchall()
+        'SELECT d.category, e.fields, (SELECT MAX(a.created_at) FROM audit_events a '
+        "WHERE a.organization_id=d.organization_id AND a.document_id=d.id "
+        "AND a.event IN ('document.categorized','document.auto_categorized')) AS chosen_at "
+        'FROM documents d JOIN document_extractions e ON e.document_id=d.id AND e.organization_id=d.organization_id '
+        'JOIN (SELECT document_id, MAX(version) AS version FROM document_extractions WHERE organization_id=? '
+        'GROUP BY document_id) m ON m.document_id=e.document_id AND m.version=e.version '
+        'WHERE d.organization_id=? AND d.id<>? AND d.category IS NOT NULL', (org_id, org_id, doc_id)).fetchall()
+    history = sorted(history, key=lambda row: row['chosen_at'] or '', reverse=True)
     category = next((row['category'] for row in history if supplier_key(json.loads(row['fields'])) == key), None)
     if category is None:
         return None
