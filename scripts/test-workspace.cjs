@@ -642,8 +642,8 @@ const path = require("node:path");
     );
     check(
       "Legal guide shows every industry with a source on each duty",
-      (await page.locator(".legal-card").count()) === 11 &&
-        legalLinks.length >= 38 &&
+      (await page.locator(".legal-card").count()) === 12 &&
+        legalLinks.length >= 43 &&
         legalLinks.every(Boolean),
     );
     // Codex review, PR #8: SZPI supervises restaurants since 2025; the health card was abolished in 2023.
@@ -661,7 +661,8 @@ const path = require("node:path");
         (await cardText("herbal")).includes("12/11/2025") &&
         (await cardText("drogerie")).includes("CPNP") &&
         (await cardText("electronics")).includes("400 m²") &&
-        (await cardText("textile")).includes("thành phần sợi"),
+        (await cardText("textile")).includes("thành phần sợi") &&
+        (await cardText("import")).includes("326 000 Kč"),
     );
     await page.locator(".legal-chip").filter({ hasText: "Nail" }).click();
     check(
