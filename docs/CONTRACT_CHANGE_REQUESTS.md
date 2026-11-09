@@ -292,3 +292,22 @@ Counts only; no document data leaves its company. No schema change.
   documents left out.
 - Not included: reading lines from a photo (needs an AI service — owner decision A), stock levels,
   sale prices / margins.
+
+## CR-10 · QR payment, VAT threshold tracker, unanswered shop messages
+
+- Requested by: the owner ("học hỏi và tối ưu" — lessons from Daturo and the speed-to-lead
+  skill), 2026-11-09 · Implemented in: `claude/quick-wins`
+- Status: proposed in PR · Depends on: CR-5, CR-6, CR-8 · New dependency: `segno` (BSD, pure Python)
+
+- `GET /v1/organizations/{org}/invoices/{id}/payment-qr` (owner, accountant) → `{spayd, image}`:
+  SPAYD 1.0 (`ACC` IBAN, `AM`, `CC:CZK`, `DT` due date, `X-VS`, `RN`, `MSG`; ASCII, no `*`) and an
+  SVG data URI. `409` unless issued, paid by transfer, supplier IBAN, CZK and 0 < amount.
+- `GET /v1/organizations/{org}/vat-threshold[?year=]` (owner, accountant) → issued invoices by
+  supply date + cash and card sales (`sales`, `services`) as the turnover estimate; bank income and
+  EUR shown but not added; `status` `ok` / `watch` (≥ 75 %) / `over_next_year` (> 2 000 000 Kč) /
+  `over_immediate` (> 2 536 500 Kč); `vat_payer` from the client profile, else the billing profile;
+  `applies` unless a payer. Source: Finanční správa, changes from 1. 1. 2025.
+- `GET /v1/portfolio` adds `vat_threshold` (non-payers), `unanswered_messages`,
+  `oldest_unanswered_at` (open tasks whose last client-visible message is the shop's) and
+  `median_reply_minutes` (shop message → next accountant reply, last 30 days). Internal notes do
+  not count as replies. No schema change.

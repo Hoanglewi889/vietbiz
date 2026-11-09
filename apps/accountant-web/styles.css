@@ -1641,3 +1641,18 @@ label.check {
 .goods-table tr.flagged td { background: #fbefe9; }
 .goods-findings { margin: 0; padding-left: 18px; color: var(--danger); }
 .goods-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* CR-10 VAT threshold and QR payment */
+.vat-threshold { display: grid; gap: 6px; margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--white); }
+.vat-threshold[hidden] { display: none; }
+.vat-threshold .threshold-status { font-weight: 600; }
+.vat-threshold.watch .threshold-status { color: #8a5a00; }
+.vat-threshold.over_next_year .threshold-status, .vat-threshold.over_immediate .threshold-status { color: var(--danger); }
+.threshold-bar { height: 8px; border-radius: 99px; background: var(--paper); overflow: hidden; }
+.threshold-bar span { display: block; height: 100%; background: var(--green); }
+.vat-threshold.watch .threshold-bar span { background: #c98a00; }
+.vat-threshold.over_next_year .threshold-bar span, .vat-threshold.over_immediate .threshold-bar span { background: var(--danger); }
+.paper-qr { margin: 16px 0 0; display: inline-grid; justify-items: center; gap: 4px; }
+.paper-qr img { width: 140px; height: 140px; }
+.paper-qr figcaption { font-size: 0.8rem; }

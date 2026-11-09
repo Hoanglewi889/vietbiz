@@ -14,12 +14,14 @@ tax in CZK needs no ČNB rate. Numbers are gapless per calendar year of the issu
 (YYYY-NNNN); the company row is locked while a number is assigned.
 """
 import json
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+import segno
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -294,6 +296,31 @@ def isdoc_xml(invoice):
     return b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding='utf-8')
 
 
+def _spayd_text(value, limit):
+    """SPAYD values: no '*' (the field separator), plain ASCII for banks that reject diacritics."""
+    plain = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode()
+    return ' '.join(plain.replace('*', ' ').split())[:limit]
+
+
+def spayd(invoice):
+    """Czech QR payment ("QR Platba", SPAYD 1.0) for an issued invoice paid to the supplier's IBAN.
+
+    Returns None when the invoice cannot be paid by such a code: not issued, not by bank
+    transfer, no IBAN on the supplier snapshot, a currency other than CZK or nothing to pay.
+    """
+    supplier, content, totals = invoice['supplier'], invoice['content'], invoice['totals']
+    amount = Decimal(totals['total'])
+    if (invoice['status'] != 'issued' or content['payment_method'] != 'bank' or not supplier.get('iban')
+            or totals.get('currency', 'CZK') != 'CZK' or not 0 < amount <= Decimal('9999999.99')):
+        return None
+    iban = supplier['iban'].replace(' ', '').upper()
+    return '*'.join([
+        'SPD', '1.0', 'ACC:' + iban, 'AM:' + str(amount.quantize(CENT)), 'CC:CZK',
+        'DT:' + content['due_date'].replace('-', ''), 'X-VS:' + invoice['variable_symbol'],
+        'RN:' + _spayd_text(supplier['legal_name'], 35), 'MSG:' + _spayd_text('Faktura ' + invoice['number'], 60),
+    ])
+
+
 def build_router(current_user, authorize, audit):
     router = APIRouter(prefix='/v1/organizations/{org_id}', tags=['Issued invoices'])
     roles = ('owner', 'accountant')
@@ -459,5 +486,16 @@ def build_router(current_user, authorize, audit):
             raise HTTPException(409, 'Only an issued invoice can be exported')
         return Response(isdoc_xml(invoice), media_type='application/xml', headers={
             'Content-Disposition': f'attachment; filename="faktura-{invoice["number"]}.isdoc"'})
+
+    @router.get('/invoices/{invoice_id}/payment-qr')
+    def payment_qr(org_id: str, invoice_id: str, uid: str = Depends(current_user)):
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            invoice = _public(load(db, org_id, invoice_id))
+        payload = spayd(invoice)
+        if payload is None:
+            raise HTTPException(409, 'A QR payment needs an issued CZK invoice paid by transfer to the supplier IBAN')
+        code = segno.make(payload, error='m', micro=False)
+        return {'spayd': payload, 'image': code.svg_data_uri(scale=4, border=2)}
 
     return router

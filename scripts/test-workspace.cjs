@@ -669,6 +669,12 @@ const path = require("node:path");
     );
     await page.locator(".invoice-row").getByRole("button", { name: "Xem & in" }).click();
     await page.locator("#print-dialog[open]").waitFor();
+    await page.locator("#invoice-print .paper-qr img").waitFor();
+    check(
+      "A bank-paid invoice prints a QR Platba code; a VAT payer sees no threshold tracker",
+      (await page.locator("#invoice-print .paper-qr img").getAttribute("src")).startsWith("data:image/svg+xml") &&
+        (await page.locator("#vat-threshold").isHidden()),
+    );
     const paper = await page.locator("#invoice-print").innerText();
     check(
       "The printable invoice carries the § 29 details in Czech",

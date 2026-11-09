@@ -6,15 +6,50 @@ waiting tasks, and the last activity. Employees' memberships are not included, a
 document, amount or name beyond the company name leaves its company scope.
 """
 from collections import defaultdict
+from datetime import date, datetime, timedelta
+from statistics import median
 
 from fastapi import APIRouter, Depends
 
 from .database import connection
 from .filing_calendar import _profile, deadlines, window
 from .tasks import today_prague
+from .vat_threshold import estimate, is_vat_payer
 
 FINANCE_ROLES = ('accountant', 'owner')
 CLOSED = ('DONE', 'CANCELLED')
+
+
+def _minutes(start, end):
+    return (datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds() / 60
+
+
+def reply_times(comments, today):
+    """Per company: open tasks whose last word is the shop's, the oldest such message, and the
+    median minutes from a shop message to the accountant's next reply over the last 30 days.
+    """
+    since = (date.fromisoformat(today) - timedelta(days=30)).isoformat()
+    threads = defaultdict(list)
+    for row in comments:
+        threads[(row['organization_id'], row['task_id'])].append(row)
+    waiting, delays = defaultdict(list), defaultdict(list)
+    for (org, _), rows in threads.items():
+        pending = None
+        for row in rows:
+            if row['role'] == 'accountant':
+                if pending and row['created_at'][:10] >= since:
+                    delays[org].append(_minutes(pending, row['created_at']))
+                pending = None
+            elif pending is None:
+                pending = row['created_at']
+        if pending and rows[-1]['status'] not in CLOSED:
+            waiting[org].append(pending)
+    out = {}
+    for org in set(waiting) | set(delays):
+        out[org] = {'unanswered_messages': len(waiting[org]),
+                    'oldest_unanswered_at': min(waiting[org]) if waiting[org] else None,
+                    'median_reply_minutes': round(median(delays[org])) if delays[org] else None}
+    return out
 
 
 def build_router(current_user):
@@ -52,6 +87,15 @@ def build_router(current_user):
                 f'UNION ALL SELECT organization_id, created_at FROM task_comments WHERE organization_id IN ({marks})'
                 ') a GROUP BY organization_id', (*ids, *ids, *ids)).fetchall()
             profiles = {org: _profile(db, org) for org in ids}
+            # Client-visible thread only; an internal accountant note is not a reply to the shop.
+            comments = db.execute(
+                f"SELECT c.organization_id, c.task_id, c.created_at, m.role, t.status FROM task_comments c "
+                'JOIN accounting_tasks t ON t.id=c.task_id AND t.organization_id=c.organization_id '
+                'LEFT JOIN memberships m ON m.organization_id=c.organization_id AND m.user_id=c.author_id '
+                f"WHERE c.organization_id IN ({marks}) AND c.visibility='client' ORDER BY c.created_at, c.id",
+                tuple(ids)).fetchall()
+            year = int(today[:4])
+            thresholds = {org: estimate(db, org, year)['status'] for org in ids if is_vat_payer(db, org) is False}
         start, end = window(30)
         by_doc = defaultdict(dict)
         for row in docs:
@@ -64,6 +108,7 @@ def build_router(current_user):
             waiting[org] += task['status'] == 'WAITING_CLIENT'
         unpaid = {r['organization_id']: r['n'] for r in unrecorded}
         last = {r['organization_id']: r['at'] for r in activity}
+        replies = reply_times(comments, today)
         items = []
         for c in companies:
             org = c['id']
@@ -75,6 +120,9 @@ def build_router(current_user):
                 'open_tasks': open_tasks[org], 'overdue_tasks': overdue[org], 'waiting_on_client': waiting[org],
                 'last_activity_at': last.get(org),
                 'profile_missing': profiles[org] is None,
+                'vat_threshold': thresholds.get(org),
+                **replies.get(org, {'unanswered_messages': 0, 'oldest_unanswered_at': None,
+                                    'median_reply_minutes': None}),
             }
             upcoming = deadlines(profiles[org], start, end) if profiles[org] else []
             item['next_deadline'] = ({k: upcoming[0][k] for k in ('code', 'due_date', 'period')}
