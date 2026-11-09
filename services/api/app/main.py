@@ -232,6 +232,8 @@ from .archive import build_router as build_archive_router
 app.include_router(build_archive_router(current_user, authorize, event))
 from .cashbook import build_router as build_cashbook_router
 app.include_router(build_cashbook_router(current_user, authorize, event))
+from .invoicing import build_router as build_invoicing_router
+app.include_router(build_invoicing_router(current_user, authorize, event))
 app.include_router(build_extraction_router(current_user, authorize, event))
 
 # Serve the local demo from the API origin; API authorization is unchanged.
