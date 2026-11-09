@@ -10,6 +10,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends
 
 from .database import connection
+from .filing_calendar import _profile, deadlines, window
 from .tasks import today_prague
 
 FINANCE_ROLES = ('accountant', 'owner')
@@ -50,6 +51,8 @@ def build_router(current_user):
                 f'UNION ALL SELECT organization_id, created_at FROM task_events WHERE organization_id IN ({marks}) '
                 f'UNION ALL SELECT organization_id, created_at FROM task_comments WHERE organization_id IN ({marks})'
                 ') a GROUP BY organization_id', (*ids, *ids, *ids)).fetchall()
+            profiles = {org: _profile(db, org) for org in ids}
+        start, end = window(30)
         by_doc = defaultdict(dict)
         for row in docs:
             by_doc[row['organization_id']][row['status']] = row['n']
@@ -71,7 +74,11 @@ def build_router(current_user):
                 'approved_without_payment': unpaid.get(org, 0),
                 'open_tasks': open_tasks[org], 'overdue_tasks': overdue[org], 'waiting_on_client': waiting[org],
                 'last_activity_at': last.get(org),
+                'profile_missing': profiles[org] is None,
             }
+            upcoming = deadlines(profiles[org], start, end) if profiles[org] else []
+            item['next_deadline'] = ({k: upcoming[0][k] for k in ('code', 'due_date', 'period')}
+                                     if upcoming else None)
             # What needs a person first: overdue work, then documents to review, then the rest.
             item['attention'] = ('high' if item['overdue_tasks'] else
                                  'medium' if item['documents_to_review'] or item['documents_returned'] else 'low')

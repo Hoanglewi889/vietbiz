@@ -1609,3 +1609,23 @@ label.check {
     min-width: 125px;
   }
 }
+
+/* CR-8 filing calendar and client profile */
+.filing-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; margin-top: 24px; }
+@media (max-width: 860px) { .filing-grid { grid-template-columns: 1fr; } }
+.deadline-list { display: grid; gap: 8px; }
+.deadline-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
+.deadline-row.conditional { border-style: dashed; }
+.deadline-date { display: grid; }
+.deadline-date small, .deadline-amount small { color: var(--muted); }
+.deadline-amount { margin: 4px 0 0; }
+.profiles-missing { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.profile-form { display: grid; gap: 10px; align-content: start; padding: 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--white); }
+.profile-form label { display: grid; gap: 4px; }
+.profile-form label.check { display: flex; gap: 8px; align-items: center; }
+#profile-osvc-fields { display: grid; gap: 10px; }
+#profile-osvc-fields[hidden] { display: none; }
+.portfolio-stat.deadline { font-weight: 600; }
+@media (max-width: 560px) { .deadline-row { grid-template-columns: 1fr; } }

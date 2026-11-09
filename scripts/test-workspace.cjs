@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -69,6 +69,38 @@ const path = require("node:path");
     check(
       "Accountant sees the client portfolio with work counts",
       firstClient.includes("Potraviny Vltava") && firstClient.includes("Chờ duyệt") && firstClient.includes("Quá hạn"),
+    );
+    // CR-8: a client without a profile is flagged; saving one produces its filing calendar.
+    check(
+      "Portfolio flags a client without a profile",
+      firstClient.includes("Thiếu hồ sơ") && (await page.locator("#profiles-missing").isVisible()),
+    );
+    await page.locator(".portfolio-row").first().getByRole("button", { name: "Thiếu hồ sơ" }).click();
+    await waitText("#profile-status", "Chưa có hồ sơ");
+    await page.locator("#profile-form-legal").selectOption("sro");
+    await page.locator("#profile-vat").selectOption("monthly");
+    await page.locator("#profile-employees").check();
+    check(
+      "OSVČ-only fields hide for a company and flat tax is closed to VAT payers",
+      (await page.locator("#profile-osvc-fields").isHidden()) &&
+        (await page.locator("#profile-band").isDisabled()),
+    );
+    await page.locator("#profile-save").click();
+    await waitText("#profile-status", "Phiên bản 1");
+    await waitText("#deadline-list", "Kontrolní hlášení (KH)");
+    const calendarText = await page.locator("#deadline-list").innerText();
+    check(
+      "Saved profile produces VAT, control statement and payroll deadlines with the office",
+      calendarText.includes("Tờ khai DPH và nộp thuế") &&
+        calendarText.includes("Lương: nộp thuế khấu trừ") &&
+        calendarText.includes("Finanční úřad") &&
+        calendarText.includes("Potraviny Vltava"),
+    );
+    await page.waitForFunction(() => !document.querySelector("#portfolio-list").textContent.includes("Thiếu hồ sơ"));
+    check(
+      "Portfolio shows the next deadline once the profile exists",
+      (await page.locator(".portfolio-row").first().innerText()).includes("Hạn tới:") &&
+        (await page.locator("#profiles-missing").isHidden()),
     );
     await page.locator(".portfolio-row").first().getByRole("button", { name: "Mở công ty" }).click();
     await page.waitForFunction(
@@ -773,6 +805,11 @@ const path = require("node:path");
       "Resetting the context clears and hides the portfolio",
       (await page.locator("#portfolio-tab").isHidden()) &&
         (await page.locator(".portfolio-row").count()) === 0,
+    );
+    check(
+      "Resetting the context clears the filing calendar and profile form",
+      (await page.locator(".deadline-row").count()) === 0 &&
+        (await page.locator("#profile-status").innerText()) === "",
     );
     check("No browser JavaScript errors", errors.length === 0);
     const report = {

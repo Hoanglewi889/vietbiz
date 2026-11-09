@@ -13,6 +13,7 @@ async function loadPortfolio() {
   $("portfolio-tab").hidden = !(accountantSomewhere || body.items.length > 1);
   if ($("portfolio-tab").hidden && !$("portfolio-view").hidden) setTab("tasks");
   renderPortfolio();
+  if (typeof loadDeadlines === "function") await loadDeadlines();
 }
 function portfolioStat(label, value, alert = false) {
   return text(
@@ -51,6 +52,13 @@ function renderPortfolio() {
       portfolioStat(t("waitingClient"), item.waiting_on_client),
       portfolioStat(t("openTasks"), item.open_tasks),
     );
+    if (item.next_deadline)
+      stats.append(text("span", fill(t("nextDeadline"), {
+        date: shortDate(item.next_deadline.due_date),
+        what: deadlineTitle(item.next_deadline.code),
+      }), "portfolio-stat deadline"));
+    if (item.profile_missing)
+      stats.append(button(t("profileMissing"), () => openProfile(item.organization_id), "portfolio-stat alert"));
     const open = button(t("openCompany"), async () => {
       $("org").value = item.organization_id;
       await switchOrg();
@@ -60,6 +68,10 @@ function renderPortfolio() {
     list.append(row);
   }
   if (!portfolio.items.length) empty(list, t("noPortfolio"));
+  if (typeof renderDeadlines === "function") {
+    renderDeadlines();
+    renderProfileOptions();
+  }
 }
 // Called from resetContext(): a new identity or company must never see the old portfolio.
 function resetPortfolio() {
@@ -68,5 +80,6 @@ function resetPortfolio() {
   $("portfolio-tab").hidden = true;
   if (!$("portfolio-view").hidden) setTab("tasks");
   $("portfolio-list").replaceChildren();
+  if (typeof resetFiling === "function") resetFiling();
 }
 $("portfolio-tab").onclick = () => setTab("portfolio");
