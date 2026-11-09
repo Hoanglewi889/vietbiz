@@ -12,6 +12,7 @@
     <script src="portfolio.js" defer></script>
     <script src="suppliers.js" defer></script>
     <script src="filing.js" defer></script>
+    <script src="goods.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -212,6 +213,20 @@
           <div class="supplier-col">
             <h3 data-i18n="categoriesTitle"></h3>
             <div id="category-bars" class="supplier-list"></div>
+          </div>
+        </section>
+        <section id="goods-panel" class="supplier-panel" hidden aria-labelledby="goods-title">
+          <div class="supplier-col">
+            <div class="goods-head">
+              <h3 id="goods-title" data-i18n="goodsTitle"></h3>
+              <label class="goods-month"><span class="sr-only" data-i18n="goodsMonth"></span><input id="goods-month" type="month" /></label>
+            </div>
+            <p id="goods-summary" class="muted small" aria-live="polite"></p>
+            <div id="goods-groups" class="supplier-list"></div>
+          </div>
+          <div class="supplier-col">
+            <h3 data-i18n="goodsTopItems"></h3>
+            <div id="goods-items" class="supplier-list"></div>
           </div>
         </section>
         <div id="document-list" class="document-list"></div>
@@ -629,6 +644,23 @@
           <p class="muted small" data-i18n="checkDisclaimer"></p>
         </section>
       </div>
+      <section id="goods-section" class="goods-section" hidden aria-labelledby="goods-lines-heading">
+        <h3 id="goods-lines-heading" data-i18n="goodsLinesTitle"></h3>
+        <p class="muted small" data-i18n="goodsPasteHint"></p>
+        <form id="goods-form" novalidate>
+          <label
+            ><span class="sr-only" data-i18n="goodsLinesTitle"></span
+            ><textarea id="goods-paste" rows="5" spellcheck="false" placeholder="SYN-001&#9;Pivo 0,5 l (24)&#9;24&#9;ks&#9;25,00&#9;21&#9;600,00"></textarea
+          ></label>
+          <p id="goods-error" class="inline-error" role="alert"></p>
+          <div class="extract-actions">
+            <button id="goods-save" class="primary" type="submit" data-i18n="goodsSave"></button>
+            <span id="goods-status" class="muted small" aria-live="polite"></span>
+          </div>
+        </form>
+        <div class="goods-scroll"><table id="goods-table" class="goods-table"></table></div>
+        <ul id="goods-findings" class="goods-findings" aria-live="polite"></ul>
+      </section>
     </dialog>
     <dialog id="print-dialog" class="wide" aria-labelledby="print-title">
       <div class="section-heading no-print">

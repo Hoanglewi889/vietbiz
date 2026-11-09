@@ -173,7 +173,10 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
         if existing:raise HTTPException(409,{'code':'duplicate_file','document_id':existing['id']})
         c.execute('INSERT INTO documents(id,organization_id,uploader_id,filename,mime,storage_path,sha256,size_bytes,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),digest,len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
         event(c,org_id,uid,'document.uploaded',did)
-        if record_isdoc(c,org_id,uid,did,isdoc_fields):event(c,org_id,uid,'document.extraction_imported',did)
+        goods=isdoc_fields.pop('goods_lines',[]) if isdoc_fields else []
+        if record_isdoc(c,org_id,uid,did,isdoc_fields):
+          event(c,org_id,uid,'document.extraction_imported',did)
+          if import_goods_lines(c,org_id,uid,did,goods):event(c,org_id,uid,'document.lines_imported',did)
     except Exception:
       target.unlink(missing_ok=True)
       raise
@@ -235,6 +238,8 @@ app.include_router(build_cashbook_router(current_user, authorize, event))
 from .invoicing import build_router as build_invoicing_router
 app.include_router(build_invoicing_router(current_user, authorize, event))
 from .portfolio import build_router as build_portfolio_router
+from .goods import build_router as build_goods_router, import_goods_lines
+app.include_router(build_goods_router(current_user, authorize, event))
 app.include_router(build_portfolio_router(current_user))
 from .filing_calendar import build_router as build_calendar_router
 app.include_router(build_calendar_router(current_user, authorize, event))

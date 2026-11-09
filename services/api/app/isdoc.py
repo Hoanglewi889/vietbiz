@@ -165,6 +165,33 @@ def parse_invoice(xml: bytes) -> dict:
     }
 
 
+def goods_lines(xml: bytes) -> list[dict]:
+    """The invoice's goods lines in the CR-9 shape; [] when absent or not usable.
+
+    Called only on XML that `parse_invoice` accepted. Lines are best effort: one unusable line
+    drops them all, so the document never carries a partial list that looks complete.
+    """
+    root = ET.fromstring(xml)
+    out = []
+    for line in root.findall(_q('InvoiceLines/InvoiceLine'))[:500]:
+        quantity = line.find(_q('InvoicedQuantity'))
+        try:
+            qty = Decimal((quantity.text or '').strip()) if quantity is not None else None
+            price = Decimal(_text(line, 'UnitPrice') or 'NaN')
+        except InvalidOperation:
+            return []
+        net = _amount(_text(line, 'LineExtensionAmount'))
+        name = _text(line, 'Item/Description')
+        rate = _rate(_text(line, 'ClassifiedTaxCategory/Percent'))
+        if qty is None or not qty.is_finite() or qty == 0 or not price.is_finite() or price < 0 or not name or net is None:
+            return []
+        out.append({'item_code': (_text(line, 'Item/SellersItemIdentification/ID') or '')[:40] or None,
+                    'name': name[:200], 'quantity': str(qty), 'unit': (quantity.get('unitCode') or 'ks')[:10],
+                    'unit_price': str(price), 'vat_rate': rate if rate in ('0', '10', '12', '15', '21') else None,
+                    'net': net})
+    return out
+
+
 def _attachment_bytes(embedded) -> bytes | None:
     """Return at most MAX_XML_BYTES of one attachment without letting pypdf inflate it.
 
@@ -209,7 +236,12 @@ def from_pdf(content: bytes) -> dict | None:
             if not payload or b'isdoc.cz/namespace/2013' not in payload:
                 continue
             try:
-                return parse_invoice(payload)
+                fields = parse_invoice(payload)
+                try:
+                    fields['goods_lines'] = goods_lines(payload)
+                except Exception:  # goods lines are optional; the invoice data still imports
+                    fields['goods_lines'] = []
+                return fields
             except NotImportable as reason:
                 log.info('ISDOC attachment %r not imported: %s', str(embedded.name)[:80], reason)
     except Exception:  # untrusted PDF: never let parsing break the upload
