@@ -130,7 +130,9 @@ async function request(path, options = {}) {
     } catch {}
     throw { status: r.status, detail };
   }
-  const result = options.blob ? await r.blob() : await r.json();
+  // 204 No Content (e.g. a deleted draft) has no body to parse.
+  const result =
+    r.status === 204 ? null : options.blob ? await r.blob() : await r.json();
   if (epoch !== state.epoch)
     throw new DOMException("Stale company response", "AbortError");
   return result;

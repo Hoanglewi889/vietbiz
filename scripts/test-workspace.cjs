@@ -576,6 +576,21 @@ const path = require("node:path");
         isdocText.includes("<VATApplicable>true</VATApplicable>") &&
         isdocText.includes("<PayableAmount>464.56</PayableAmount>"),
     );
+    // Codex review, PR #7: deleting a draft (204, no body) must refresh the list, not fail.
+    await page.locator("#new-invoice").click();
+    await page.locator("#i-customer_name").fill("Synthetic Draft s.r.o.");
+    await page.locator("#i-customer_address").fill("Vzorová 3, 602 00 Brno");
+    await invLine(1).locator('[data-key="description"]').fill("Synthetic draft line");
+    await invLine(1).locator('[data-key="unit_price"]').fill("10");
+    await page.locator("#invoice-save").click();
+    await page.waitForFunction(() => document.querySelectorAll(".invoice-row").length === 2);
+    await page.locator(".invoice-row").filter({ hasText: "Synthetic Draft" }).getByRole("button", { name: "Xóa nháp" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".invoice-row").length === 1);
+    check(
+      "Deleting a draft refreshes the list and closes its editor",
+      (await page.locator("#invoice-form").isHidden()) &&
+        !(await page.locator("#notice").evaluate((n) => n.classList.contains("error"))),
+    );
     await page.locator("#language").selectOption("cs");
     check(
       "Invoices are translated to Czech",
