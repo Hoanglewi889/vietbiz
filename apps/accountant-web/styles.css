@@ -700,6 +700,150 @@ dialog form > label {
 dialog .muted {
   font-size: 12px;
 }
+dialog.wide {
+  width: min(1240px, calc(100% - 32px));
+  max-height: 94vh;
+}
+.extract-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-areas:
+    "original check"
+    "original form";
+  grid-template-rows: auto 1fr;
+  gap: 20px 28px;
+  margin-top: 12px;
+}
+.extract-original {
+  grid-area: original;
+  min-width: 0;
+}
+#extract-form {
+  grid-area: form;
+  min-width: 0;
+}
+.extract-check {
+  grid-area: check;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fbfcf6;
+}
+.extract-layout h3 {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #eef1ea;
+  overflow: auto;
+}
+.preview img {
+  max-width: 100%;
+  image-rendering: auto;
+}
+.preview iframe {
+  width: 100%;
+  height: 72vh;
+  border: 0;
+}
+#extract-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+#extract-form legend {
+  font-weight: 650;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.vat-lines {
+  display: grid;
+  gap: 8px;
+}
+.vat-line {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.remove-line {
+  font-size: 18px;
+  line-height: 1;
+  padding: 10px 12px;
+}
+#x-add-line {
+  justify-self: start;
+  font-size: 12px;
+}
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.extract-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.check-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.badge.ok {
+  background: var(--lime);
+  color: var(--ink);
+}
+.badge.warn {
+  background: #f4e0d8;
+  color: var(--danger);
+}
+.findings {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.findings li {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--danger);
+  background: #f8efe9;
+  font-size: 13px;
+}
+.findings li.review {
+  border-left-color: #9a7a1c;
+  background: #f7f2e2;
+}
+.findings li.unsupported {
+  border-left-color: var(--muted);
+  background: #eef0ec;
+}
+.findings strong {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.findings small,
+.small {
+  color: var(--muted);
+  font-size: 11px;
+}
 .skip {
   position: absolute;
   left: 16px;
@@ -840,6 +984,28 @@ dialog .muted {
   }
   dialog {
     padding: 20px;
+  }
+  .extract-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "original"
+      "check"
+      "form";
+    grid-template-rows: auto;
+  }
+  .preview {
+    position: static;
+    min-height: 200px;
+  }
+  .preview iframe {
+    height: 52vh;
+  }
+  .vat-line {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    gap: 6px;
+  }
+  .vat-line input {
+    padding: 9px 8px;
   }
   .form-row {
     flex-wrap: wrap;

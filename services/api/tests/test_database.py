@@ -27,7 +27,7 @@ def test_migration_idempotence_and_backup_restore(tmp_path):
     with sqlite3.connect(restored) as db:
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert db.execute('SELECT id FROM users').fetchone()[0] == 'retained-user'
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '0003_accountant_tasks'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '0004_document_extractions'
     assert migrate(restored).returncode == 0
 
 

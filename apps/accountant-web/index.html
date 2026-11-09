@@ -214,5 +214,137 @@
         ></button>
       </form>
     </dialog>
+    <dialog id="extract-dialog" class="wide" aria-labelledby="extract-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="extract-title" data-i18n="invoiceData"></h2>
+          <p id="extract-file" class="muted"></p>
+        </div>
+        <button
+          type="button"
+          id="close-extract"
+          class="icon-button"
+          data-i18n="close"
+        ></button>
+      </div>
+      <div class="extract-layout">
+        <section class="extract-original" aria-labelledby="original-heading">
+          <h3 id="original-heading" data-i18n="originalPreview"></h3>
+          <div id="extract-preview" class="preview"></div>
+        </section>
+        <form id="extract-form" novalidate>
+          <p class="muted" data-i18n="manualEntryNotice"></p>
+          <fieldset>
+            <legend data-i18n="supplier"></legend>
+            <label
+              ><span data-i18n="supplierName"></span
+              ><input id="x-supplier_name" maxlength="200" autocomplete="off"
+            /></label>
+            <label
+              ><span data-i18n="vatId"></span
+              ><input id="x-supplier_vat_id" maxlength="20" autocomplete="off"
+            /></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="documentDetails"></legend>
+            <div class="form-row">
+              <label
+                ><span data-i18n="documentNumber"></span
+                ><input id="x-document_number" maxlength="64" autocomplete="off"
+              /></label>
+              <label
+                ><span data-i18n="issueDate"></span
+                ><input id="x-issue_date" type="date"
+              /></label>
+              <label
+                ><span data-i18n="supplyDate"></span
+                ><input id="x-supply_date" type="date"
+              /></label>
+            </div>
+            <label
+              ><span data-i18n="subject"></span
+              ><input id="x-subject" maxlength="500" autocomplete="off"
+            /></label>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="customer"></legend>
+            <div class="form-row">
+              <label
+                ><span data-i18n="customerName"></span
+                ><input id="x-customer_name" maxlength="200" autocomplete="off"
+              /></label>
+              <label
+                ><span data-i18n="vatId"></span
+                ><input id="x-customer_vat_id" maxlength="20" autocomplete="off"
+              /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="vatLines"></legend>
+            <div id="x-lines" class="vat-lines"></div>
+            <button
+              type="button"
+              id="x-add-line"
+              class="secondary"
+              data-i18n="addLine"
+            ></button>
+            <div class="form-row">
+              <label
+                ><span data-i18n="total"></span
+                ><input id="x-total" inputmode="decimal" autocomplete="off"
+              /></label>
+              <label
+                ><span data-i18n="currency"></span
+                ><select id="x-currency">
+                  <option value="CZK">CZK</option>
+                  <option value="EUR">EUR</option>
+                </select></label
+              >
+            </div>
+            <label class="check"
+              ><input id="x-exempt" type="checkbox" /><span
+                data-i18n="exempt"
+              ></span
+            ></label>
+            <label class="check"
+              ><input id="x-reverse_charge" type="checkbox" /><span
+                data-i18n="reverseCharge"
+              ></span
+            ></label>
+          </fieldset>
+          <p id="extract-error" class="inline-error" role="alert"></p>
+          <div class="extract-actions">
+            <button
+              id="extract-save"
+              class="primary"
+              type="submit"
+              data-i18n="saveData"
+            ></button>
+            <button
+              id="extract-request-changes"
+              class="secondary"
+              type="button"
+              data-i18n="requestChanges"
+            ></button>
+            <button
+              id="extract-approve"
+              class="secondary"
+              type="button"
+              data-i18n="approve"
+            ></button>
+          </div>
+        </form>
+        <section
+          id="extract-check"
+          class="extract-check"
+          aria-live="polite"
+          aria-labelledby="check-heading"
+        >
+          <h3 id="check-heading" data-i18n="checkTitle"></h3>
+          <div id="check-body"></div>
+          <p class="muted small" data-i18n="checkDisclaimer"></p>
+        </section>
+      </div>
+    </dialog>
   </body>
 </html>
