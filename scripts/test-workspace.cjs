@@ -642,8 +642,8 @@ const path = require("node:path");
     );
     check(
       "Legal guide shows every industry with a source on each duty",
-      (await page.locator(".legal-card").count()) === 6 &&
-        legalLinks.length >= 21 &&
+      (await page.locator(".legal-card").count()) === 12 &&
+        legalLinks.length >= 43 &&
         legalLinks.every(Boolean),
     );
     // Codex review, PR #8: SZPI supervises restaurants since 2025; the health card was abolished in 2023.
@@ -653,6 +653,16 @@ const path = require("node:path");
       bistroText.includes("SZPI kiểm tra quán ăn (từ 1/1/2025)") &&
         bistroText.includes("đã bị bãi bỏ từ 1/7/2023") &&
         !bistroText.includes("Thẻ sức khỏe nhân viên"),
+    );
+    const cardText = (id) => page.locator(`.legal-card[data-industry="${id}"]`).innerText();
+    check(
+      "New industry cards cover tobacco stamps, kratom permit, cosmetics, take-back and textile labels",
+      (await cardText("tobacco")).includes("tem thuế Séc") &&
+        (await cardText("herbal")).includes("12/11/2025") &&
+        (await cardText("drogerie")).includes("CPNP") &&
+        (await cardText("electronics")).includes("400 m²") &&
+        (await cardText("textile")).includes("thành phần sợi") &&
+        (await cardText("import")).includes("326 000 Kč"),
     );
     await page.locator(".legal-chip").filter({ hasText: "Nail" }).click();
     check(
