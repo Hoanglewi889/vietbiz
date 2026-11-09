@@ -242,9 +242,11 @@ const COPY = {
     unansweredMessages: "Tin cửa hàng chờ trả lời: {n} · từ {since}",
     medianReply: "Trả lời trung bình: {m}",
     vatThresholdShort: "Ngưỡng DPH",
+    vatThresholdHigh:
+      "Có thể đến {high} ({status}) nếu khoản thu tiền mặt, thẻ trong sổ thu chi không phải là tiền trả các hóa đơn đã xuất.",
     vatThresholdLine: "Doanh thu ước tính {year}: {estimate} / ngưỡng DPH 2 000 000 Kč",
     vatThresholdNote:
-      "Hóa đơn đã xuất {invoiced} + bán tiền mặt và thẻ {counter}. Tiền vào tài khoản {bank} không cộng thêm vì thường là tiền trả các hóa đơn trên. Trên 2 000 000 Kč: thành người nộp DPH từ 1/1 năm sau; trên 2 536 500 Kč: từ ngày hôm sau; nộp đơn đăng ký trong 10 ngày làm việc. Kế toán xác nhận lại.",
+      "Hóa đơn đã xuất {invoiced}; bán tiền mặt và thẻ {counter} (hóa đơn trả tiền mặt, thẻ có thể đã nằm trong đó nên không cộng hai lần). Tiền vào tài khoản {bank} không cộng thêm vì thường là tiền trả các hóa đơn trên. Trên 2 000 000 Kč: thành người nộp DPH từ 1/1 năm sau; trên 2 536 500 Kč: từ ngày hôm sau; nộp đơn đăng ký trong 10 ngày làm việc. Kế toán xác nhận lại.",
     vatThresholdStatus: {
       ok: "Còn xa ngưỡng",
       watch: "Đã quá 75 % — theo dõi",
@@ -697,9 +699,11 @@ const COPY = {
     unansweredMessages: "Zprávy klienta bez odpovědi: {n} · od {since}",
     medianReply: "Medián odpovědi: {m}",
     vatThresholdShort: "Obrat pro DPH",
+    vatThresholdHigh:
+      "Až {high} ({status}), pokud hotovostní a kartové příjmy v pokladní knize nejsou úhradami vystavených faktur.",
     vatThresholdLine: "Odhad obratu {year}: {estimate} / limit 2 000 000 Kč",
     vatThresholdNote:
-      "Vystavené faktury {invoiced} + tržby hotově a kartou {counter}. Příjmy na účet {bank} se nepřičítají, obvykle jde o úhrady těchto faktur. Nad 2 000 000 Kč plátcem od 1. 1. následujícího roku, nad 2 536 500 Kč dnem následujícím; přihláška do 10 pracovních dnů. Ověří účetní.",
+      "Vystavené faktury {invoiced}; tržby hotově a kartou {counter} (faktury placené hotově či kartou v nich mohou být, proto se nesčítají dvakrát). Příjmy na účet {bank} se nepřičítají, obvykle jde o úhrady těchto faktur. Nad 2 000 000 Kč plátcem od 1. 1. následujícího roku, nad 2 536 500 Kč dnem následujícím; přihláška do 10 pracovních dnů. Ověří účetní.",
     vatThresholdStatus: {
       ok: "Daleko od limitu",
       watch: "Nad 75 % — sledovat",

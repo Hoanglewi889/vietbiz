@@ -303,8 +303,10 @@ Counts only; no document data leaves its company. No schema change.
   SPAYD 1.0 (`ACC` IBAN, `AM`, `CC:CZK`, `DT` due date, `X-VS`, `RN`, `MSG`; ASCII, no `*`) and an
   SVG data URI. `409` unless issued, paid by transfer, supplier IBAN, CZK and 0 < amount.
 - `GET /v1/organizations/{org}/vat-threshold[?year=]` (owner, accountant) → issued invoices by
-  supply date + cash and card sales (`sales`, `services`) as the turnover estimate; bank income and
-  EUR shown but not added; `status` `ok` / `watch` (≥ 75 %) / `over_next_year` (> 2 000 000 Kč) /
+  supply date + cash and card sales (`sales`, `services`); invoices paid in cash or by card may be
+  in the cashbook too, so `estimate` = transfer-paid invoices + the larger of cash/card invoices
+  and cash/card sales, `estimate_high` = no overlap (with `status_high`); bank income and
+  EUR shown but not added; `status` (from `estimate`) `ok` / `watch` (≥ 75 %) / `over_next_year` (> 2 000 000 Kč) /
   `over_immediate` (> 2 536 500 Kč); `vat_payer` from the client profile, else the billing profile;
   `applies` unless a payer. Source: Finanční správa, changes from 1. 1. 2025.
 - `GET /v1/portfolio` adds `vat_threshold` (non-payers), `unanswered_messages`,

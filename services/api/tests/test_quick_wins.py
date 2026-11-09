@@ -123,3 +123,19 @@ def test_portfolio_shows_waiting_shop_messages_and_the_vat_threshold():
     item = next(i for i in c.get('/v1/portfolio', headers=h(accountant)).json()['items'] if i['organization_id'] == org)
     assert item['unanswered_messages'] == 0 and item['median_reply_minutes'] == 0
     assert item['vat_threshold'] == 'ok'
+
+
+# Codex review, PR #15 ---------------------------------------------------------
+
+def test_a_card_paid_invoice_recorded_in_the_cashbook_is_not_counted_twice():
+    owner, accountant, _, org = payer_company()
+    profile(org, owner, dic='', vat_payer=False)
+    big = [{'description': 'Synthetic catering', 'unit': 'ks', 'quantity': '1', 'unit_price': '1100000',
+            'vat_rate': None}]
+    issued(org, owner, lines=big, payment_method='card', supply_date='2026-02-10', issue_date='2026-02-10',
+           due_date='2026-02-10')
+    cash_entry(org, owner, '1100000.00', method='card')
+    body = c.get(url(org, '/vat-threshold?year=2026'), headers=h(accountant)).json()
+    assert (body['estimate'], body['estimate_high']) == ('1100000.00', '2200000.00')
+    assert (body['status'], body['status_high']) == ('ok', 'over_next_year')
+    assert body['invoiced_cash_and_card'] == '1100000.00'

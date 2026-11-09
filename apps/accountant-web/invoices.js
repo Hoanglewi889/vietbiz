@@ -13,7 +13,7 @@ const CUSTOMER_FIELDS = [
   "payment_method",
   "note",
 ];
-const inv = { profile: null, items: [], editing: null, ticket: 0, threshold: null };
+const inv = { profile: null, items: [], editing: null, ticket: 0, threshold: null, printTicket: 0 };
 
 const addDays = (iso, days) => {
   const d = new Date(iso + "T12:00:00Z");
@@ -259,9 +259,18 @@ function renderThreshold() {
     bank: czk(data.bank_income_not_added),
   }) + " ");
   note.append(link);
-  box.replaceChildren(
+  const parts = [
     text("strong", fill(t("vatThresholdLine"), { year: data.year, estimate: czk(data.estimate) })),
     text("span", COPY[lang].vatThresholdStatus[data.status], "threshold-status"),
+  ];
+  // Cash/card-paid invoices may also be in the cashbook; the upper bound assumes they are not.
+  if (data.estimate_high !== data.estimate)
+    parts.push(text("small", fill(t("vatThresholdHigh"), {
+      high: czk(data.estimate_high),
+      status: COPY[lang].vatThresholdStatus[data.status_high],
+    })));
+  box.replaceChildren(
+    ...parts,
     bar,
     note,
   );
@@ -336,6 +345,9 @@ function partyBlock(title, lines) {
   return box;
 }
 function showPrint(item) {
+  // Codex review, PR #15: every opened print view has its own ticket, so a late QR for an
+  // earlier invoice is never added to the one now shown.
+  const printTicket = ++inv.printTicket;
   const s = item.supplier,
     c = item.content,
     totals = item.totals,
@@ -411,7 +423,7 @@ function showPrint(item) {
     const ticket = inv.ticket;
     request(base() + "/invoices/" + encodeURIComponent(item.id) + "/payment-qr")
       .then((qr) => {
-        if (ticket !== inv.ticket || !$("print-dialog").open) return;
+        if (ticket !== inv.ticket || printTicket !== inv.printTicket || !$("print-dialog").open) return;
         const figure = text("figure", "", "paper-qr"),
           img = document.createElement("img");
         img.src = qr.image;
