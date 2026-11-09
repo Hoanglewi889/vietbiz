@@ -187,6 +187,7 @@ function resetContext() {
   if (typeof resetPortfolio === "function") resetPortfolio();
   if (typeof resetSuppliers === "function") resetSuppliers();
   if (typeof resetGoods === "function") resetGoods();
+  if (typeof resetBank === "function") resetBank();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
@@ -256,6 +257,7 @@ async function refresh() {
     loadCash(),
     invoicesReady() ? loadInvoices() : null,
     typeof loadPortfolio === "function" ? loadPortfolio() : null,
+    typeof loadBank === "function" ? loadBank() : null,
   ]);
   if (state.task) await selectTask(state.task.id);
 }
@@ -1039,6 +1041,13 @@ function renderCheck() {
     ),
   );
   body.append(meta);
+  // CR-11: the same supplier's invoice number (or date and total) is already in the archive.
+  if (data.possible_duplicates?.length) {
+    const dup = text("p", fill(t("extractDuplicate"), {
+      files: data.possible_duplicates.map((d) => d.filename + (d.document_number ? " (" + d.document_number + ")" : "")).join(", "),
+    }), "check-duplicate");
+    body.append(dup);
+  }
   if (!check.findings.length) return;
   const list = text("ul", "", "findings");
   for (const f of check.findings) {
@@ -1220,6 +1229,7 @@ function translate() {
   if (typeof renderPortfolio === "function") renderPortfolio();
   if (typeof renderSuppliers === "function") renderSuppliers();
   if (typeof renderGoods === "function") renderGoods();
+  if (typeof renderBank === "function" && !$("bank-tab").hidden) renderBank();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1241,7 +1251,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["portfolio", "tasks", "docs", "cash", "invoices", "legal"]) {
+  for (const name of ["portfolio", "tasks", "docs", "cash", "bank", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));

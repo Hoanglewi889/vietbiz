@@ -13,6 +13,7 @@
     <script src="suppliers.js" defer></script>
     <script src="filing.js" defer></script>
     <script src="goods.js" defer></script>
+    <script src="bank.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -102,6 +103,7 @@
         ><button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
+        ><button id="bank-tab" class="tab" hidden data-i18n="bankTab"></button
         ><button id="legal-tab" class="tab" data-i18n="legalTab"></button
         ><button
           id="invoices-tab"
@@ -301,6 +303,11 @@
           ></button>
         </div>
         <div id="vat-threshold" class="vat-threshold" hidden aria-live="polite"></div>
+        <section id="reminders" class="reminders" hidden aria-labelledby="reminders-title">
+          <h3 id="reminders-title" data-i18n="remindersTitle"></h3>
+          <p class="muted small" data-i18n="remindersHint"></p>
+          <div id="reminder-list" class="reminder-list"></div>
+        </section>
         <details id="billing-details" class="billing-details">
           <summary data-i18n="sellerProfile"></summary>
           <form id="billing-form" class="invoice-grid" novalidate>
@@ -452,6 +459,27 @@
             <button id="profile-save" class="primary" type="submit" data-i18n="saveProfile"></button>
           </form>
         </div>
+      </section>
+      <section id="bank-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="bankTab"></h2>
+            <p class="muted" data-i18n="bankHint"></p>
+          </div>
+        </div>
+        <form id="bank-form" class="bank-form">
+          <label
+            ><span data-i18n="bankFile"></span
+            ><input id="bank-file" type="file" accept=".gpc,.csv,.txt,text/csv,text/plain"
+          /></label>
+          <button id="bank-import" class="primary" type="submit" data-i18n="bankImport"></button>
+        </form>
+        <div class="bank-filters" role="group">
+          <button id="bank-filter-unmatched" class="bank-chip" type="button"></button
+          ><button id="bank-filter-matched" class="bank-chip" type="button"></button
+          ><button id="bank-filter-ignored" class="bank-chip" type="button"></button>
+        </div>
+        <div id="bank-list" class="bank-list" aria-live="polite"></div>
       </section>
       <section id="legal-view" class="panel" hidden>
         <div class="section-heading">

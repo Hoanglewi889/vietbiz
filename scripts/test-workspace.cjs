@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -744,6 +744,43 @@ const path = require("node:path");
       isdocFile.suggestedFilename() === "faktura-" + year + "-0001.isdoc" &&
         isdocText.includes("<VATApplicable>true</VATApplicable>") &&
         isdocText.includes("<PayableAmount>464.56</PayableAmount>"),
+    );
+    // CR-11: a bank statement pays the invoice by its variable symbol; the rest is decided by hand.
+    const gpcLine = (hal, code, vs, ref, counter = "19") =>
+      "075" + "1234567890".padStart(16, "0") + counter.padStart(16, "0") + ref.padStart(13, "0") +
+      String(hal).padStart(12, "0") + code + vs.padStart(10, "0") + "08000308".padEnd(10, "0") + "0".repeat(10) +
+      "000000" + "SYNTHETIC".padEnd(20) + "0" + "0203" + "051126";
+    const gpcHead = "074" + "1234567890".padStart(16, "0") + "SYNTHETIC UCET".padEnd(20) + "011126" + "0".repeat(14) +
+      "+" + "0".repeat(14) + "+" + "0".repeat(14) + "0" + "0".repeat(14) + "0" + "001" + "061126" + " ".repeat(14);
+    const statement = [gpcHead, gpcLine(46456, "2", year + "0001", "1"), gpcLine(1500, "1", "", "2", "0"),
+      gpcLine(25000, "1", "", "3", "77"), gpcLine(25000, "1", "", "4", "77")].join("\r\n") + "\r\n";
+    await page.locator("#bank-tab").click();
+    await page.locator("#bank-file").setInputFiles({ name: "vypis.gpc", mimeType: "text/plain", buffer: Buffer.from(statement) });
+    await page.locator("#bank-import").click();
+    await waitText("#notice", "Đã nhập: 4 giao dịch mới");
+    await waitText("#bank-filter-matched", "(1)");
+    check(
+      "A GPC statement is imported and the invoice payment is matched by its variable symbol",
+      (await page.locator("#notice").innerText()).includes("tự khớp 1") &&
+        (await page.locator("#bank-filter-matched").innerText()).includes("(1)"),
+    );
+    check(
+      "Two equal payments to the same account within days are flagged",
+      (await page.locator(".bank-row .bank-flag").count()) === 2,
+    );
+    await page.locator("#bank-file").setInputFiles({ name: "vypis.gpc", mimeType: "text/plain", buffer: Buffer.from(statement) });
+    await page.locator("#bank-import").click();
+    await waitText("#notice", "đã được nhập rồi");
+    check("The same statement file is not imported twice", true);
+    const feeRow = page.locator(".bank-row").filter({ hasText: "-15,00" });
+    await feeRow.getByRole("button", { name: "Không cần chứng từ" }).click();
+    await waitText("#bank-filter-ignored", "(1)");
+    check("A bank fee is marked as needing no document", (await page.locator(".bank-row").count()) === 2);
+    await page.locator("#invoices-tab").click();
+    await waitText("#invoice-list", "đã trả");
+    check(
+      "The issued invoice shows it was paid",
+      (await page.locator(".invoice-row").first().innerText()).includes("đã trả"),
     );
     // Codex review, PR #7: deleting a draft (204, no body) must refresh the list, not fail.
     await page.locator("#new-invoice").click();
