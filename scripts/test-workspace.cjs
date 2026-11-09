@@ -96,6 +96,25 @@ const path = require("node:path");
         calendarText.includes("Finanční úřad") &&
         calendarText.includes("Potraviny Vltava"),
     );
+    // Codex review, PR #13: no save while the selected company's profile is still loading.
+    let releaseProfile;
+    const profileGate = new Promise((resolve) => (releaseProfile = resolve));
+    await page.route(/\/client-profile$/, async (route) => {
+      if (route.request().method() === "GET") await profileGate;
+      await route.continue();
+    });
+    // Reopening (as when switching straight from one company to another) starts a new load.
+    await page.evaluate(() => {
+      openProfile(document.querySelector("#profile-org").value);
+    });
+    check(
+      "Saving is blocked while the selected company's profile is still loading",
+      await page.locator("#profile-save").isDisabled(),
+    );
+    releaseProfile();
+    await waitText("#profile-status", "Phiên bản 1");
+    check("Saving is possible once that profile has loaded", await page.locator("#profile-save").isEnabled());
+    await page.unroute(/\/client-profile$/);
     await page.waitForFunction(() => !document.querySelector("#portfolio-list").textContent.includes("Thiếu hồ sơ"));
     check(
       "Portfolio shows the next deadline once the profile exists",
@@ -809,7 +828,11 @@ const path = require("node:path");
     check(
       "Resetting the context clears the filing calendar and profile form",
       (await page.locator(".deadline-row").count()) === 0 &&
-        (await page.locator("#profile-status").innerText()) === "",
+        (await page.locator("#profile-status").innerText()) === "" &&
+        // Codex review, PR #13: the previous client's values leave the controls too.
+        !(await page.locator("#profile-employees").isChecked()) &&
+        (await page.locator("#profile-org option").count()) === 1 &&
+        (await page.locator("#profile-save").isDisabled()),
     );
     check("No browser JavaScript errors", errors.length === 0);
     const report = {

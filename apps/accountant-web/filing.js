@@ -1,7 +1,8 @@
 "use strict";
 // Client profiles and the filing calendar (CR-8): what each company files, where, and by when.
 // Dates and amounts come from the API; this file only shows them and edits the profile.
-const filing = { items: [], missing: [], ticket: 0, profileTicket: 0, profileOrg: "", profile: null, made: new Set() };
+const filing = { items: [], missing: [], ticket: 0, profileTicket: 0, profileOrg: "", loadedOrg: "", saving: false,
+  profile: null, made: new Set() };
 const FILING_DAYS = 45;
 
 function industryName(id) {
@@ -113,18 +114,23 @@ function syncProfileForm() {
   const flatAllowed = osvc && $("profile-vat").value === "none";
   $("profile-band").disabled = !flatAllowed;
   if (!flatAllowed) $("profile-band").value = "";
-  $("profile-save").disabled = !filing.profileOrg;
+  // Codex review, PR #13: only the company whose profile is loaded in the form can be saved,
+  // never while another company's profile is still loading, after a failed load or mid-save.
+  $("profile-save").disabled = filing.saving || !filing.loadedOrg || filing.loadedOrg !== filing.profileOrg;
 }
 async function openProfile(org) {
   filing.profileOrg = org;
   $("profile-org").value = org;
   const ticket = ++filing.profileTicket;
   filing.profile = null;
-  $("profile-status").textContent = "";
-  if (!org) return syncProfileForm();
+  filing.loadedOrg = "";
+  $("profile-status").textContent = org ? "…" : "";
+  syncProfileForm();
+  if (!org) return;
   const body = await request("/v1/organizations/" + org + "/client-profile");
   if (ticket !== filing.profileTicket) return;
   filing.profile = body.profile;
+  filing.loadedOrg = org;
   const p = body.profile || { legal_form: "osvc", industry: "grocery", vat_status: "none", has_employees: false,
     osvc_activity: "main", flat_tax_band: null, tax_adviser: false, health_insurer: null };
   $("profile-form-legal").value = p.legal_form;
@@ -141,7 +147,8 @@ async function openProfile(org) {
 }
 async function saveClientProfile() {
   const org = filing.profileOrg;
-  if (!org) throw { messageKey: "chooseCompanyFirst" };
+  if (!org || filing.loadedOrg !== org) throw { messageKey: "chooseCompanyFirst" };
+  const ticket = filing.profileTicket;
   const osvc = $("profile-form-legal").value === "osvc";
   const body = {
     legal_form: $("profile-form-legal").value,
@@ -154,14 +161,22 @@ async function saveClientProfile() {
     health_insurer: osvc ? $("profile-insurer").value.trim() || null : null,
     expected_version: filing.profile ? filing.profile.version : null,
   };
+  filing.saving = true;
+  syncProfileForm();
   try {
     const saved = await request("/v1/organizations/" + org + "/client-profile", json("PUT", body));
-    filing.profile = saved.profile;
+    // The form may have moved to another company meanwhile; its state is not this one's.
+    if (ticket === filing.profileTicket) {
+      filing.profile = saved.profile;
+      $("profile-status").textContent = fill(t("profileVersion"), { v: saved.profile.version });
+    }
   } catch (error) {
     if (error.status === 409) throw { messageKey: "profileConflict" };
     throw error;
+  } finally {
+    filing.saving = false;
+    syncProfileForm();
   }
-  $("profile-status").textContent = fill(t("profileVersion"), { v: filing.profile.version });
   notice(t("profileSaved"));
   await loadPortfolio();
 }
@@ -172,16 +187,22 @@ function resetFiling() {
   filing.items = [];
   filing.missing = [];
   filing.profileOrg = "";
+  filing.loadedOrg = "";
+  filing.saving = false;
   filing.profile = null;
   filing.made = new Set();
   $("deadline-list").replaceChildren();
   $("profiles-missing").replaceChildren();
   $("profile-status").textContent = "";
+  // Codex review, PR #13: the previous identity's client values must not stay in the controls.
+  $("profile-form").reset();
+  $("profile-org").replaceChildren(option("", t("chooseCompany")));
+  syncProfileForm();
 }
 $("profile-org").onchange = () => run(() => openProfile($("profile-org").value));
 $("profile-form-legal").onchange = syncProfileForm;
 $("profile-vat").onchange = syncProfileForm;
 $("profile-form").onsubmit = (e) => {
   e.preventDefault();
-  run(saveClientProfile, $("profile-save"));
+  if (!$("profile-save").disabled) run(saveClientProfile);
 };
