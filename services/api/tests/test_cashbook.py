@@ -1,16 +1,18 @@
 """CR-4 cashbook and monthly report: totals, void, cash limit, unrecorded invoices, roles. Synthetic data only."""
-from datetime import date, timedelta
+from uuid import uuid4
 
+import app.cashbook as cashbook
 from test_api import c, h, user
 from test_archive import company, record, upload
 
 MONTH = '2026-10'
 
 
-def entry(org, who, **changes):
+def entry(org, who, key=None, **changes):
     body = {'kind': 'expense', 'entry_date': '2026-10-05', 'amount': '1000', 'currency': 'CZK',
             'method': 'bank', 'category': 'goods', **changes}
-    return c.post(f'/v1/organizations/{org}/cashbook', headers=h(who), json=body)
+    return c.post(f'/v1/organizations/{org}/cashbook', json=body,
+                  headers={**h(who), 'Idempotency-Key': key or str(uuid4())})
 
 
 def book(org, who, **params):
@@ -41,10 +43,9 @@ def test_entries_total_by_currency_category_and_method():
 
 def test_invalid_entries_are_rejected():
     owner, _, _, org = company()
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
     for bad in ({'kind': 'income', 'category': 'goods'}, {'category': 'sales'}, {'amount': '0'},
                 {'amount': '-5'}, {'amount': '1.234'}, {'method': 'crypto'}, {'currency': 'USD'},
-                {'entry_date': tomorrow}, {'unknown': 1}):
+                {'entry_date': '2999-01-01'}, {'unknown': 1}):
         assert entry(org, owner, **bad).status_code == 422, bad
     other_owner, _, _, other_org = company()
     foreign = upload(other_org, other_owner, b'%PDF-1.4\nForeign').json()['id']
@@ -118,3 +119,29 @@ def test_only_owner_and_accountant_of_the_company_can_use_the_cashbook():
     assert c.post(f"/v1/organizations/{other_org}/cashbook/{made['id']}/void", headers=h(other_owner),
                   json={'reason': 'not mine'}).status_code == 404
     assert book(other_org, other_owner).json()['items'] == []
+
+
+def test_future_dates_follow_the_prague_calendar(monkeypatch):
+    owner, _, _, org = company()
+    # 00:30 in Prague on 6 October is still 5 October on a UTC server.
+    monkeypatch.setattr(cashbook, 'today_prague', lambda: '2026-10-06')
+    assert entry(org, owner, entry_date='2026-10-06').status_code == 201
+    assert entry(org, owner, entry_date='2026-10-07').status_code == 422
+
+
+def test_a_retried_submission_is_recorded_once():
+    owner, accountant, _, org = company()
+    key = str(uuid4())
+    first = entry(org, owner, key=key, amount='750')
+    again = entry(org, owner, key=key, amount='750')
+    assert (first.status_code, again.status_code) == (201, 200)
+    assert again.json()['id'] == first.json()['id'] and 'request_hash' not in again.json()
+    assert entry(org, owner, key=key, amount='751').status_code == 409
+    assert entry(org, accountant, key=key, amount='751').status_code == 201  # keys are per user
+    assert book(org, owner).json()['totals']['CZK']['expense'] == '1501.00'
+    audit = [e['event'] for e in c.get(f'/v1/organizations/{org}/audit', headers=h(owner)).json()]
+    assert audit.count('cashbook.entry_created') == 2
+    missing = c.post(f'/v1/organizations/{org}/cashbook', headers=h(owner),
+                     json={'kind': 'expense', 'entry_date': '2026-10-05', 'amount': '1',
+                           'method': 'bank', 'category': 'goods'})
+    assert missing.status_code == 422

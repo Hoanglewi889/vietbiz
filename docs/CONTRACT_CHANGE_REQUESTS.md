@@ -152,12 +152,12 @@ overview. It is a management view on a cash basis, not a tax return or a stateme
 
 | Method | Path | Roles | Result |
 | --- | --- | --- | --- |
-| `POST` | `/v1/organizations/{org_id}/cashbook` | owner, accountant | `201` entry with `findings` · `422` invalid · `403` |
+| `POST` | `/v1/organizations/{org_id}/cashbook` + header `Idempotency-Key` | owner, accountant | `201` entry with `findings` · `200` same entry on a retry · `409` key reused for another entry · `422` invalid · `403` |
 | `GET` | `/v1/organizations/{org_id}/cashbook?month=YYYY-MM&include_voided=` | owner, accountant | `200 {month, items, totals, findings, categories}` |
 | `POST` | `/v1/organizations/{org_id}/cashbook/{entry_id}/void` `{"reason": "…"}` | owner, accountant | `200` · `409` already voided · `404` other company |
 | `GET` | `/v1/organizations/{org_id}/reports/monthly?month=YYYY-MM` | owner, accountant | `200 {month, entries, totals, findings, unrecorded_invoices, basis: "cash", is_tax_return: false}` |
 
-- Entry: `kind` income/expense, `entry_date` (not in the future), positive `amount` (≤ 2 decimals),
+- Entry: `kind` income/expense, `entry_date` (not after today in Europe/Prague), positive `amount` (≤ 2 decimals),
   `currency` CZK/EUR, `method` cash/card/bank, `category` (income: sales, services, other;
   expense: the CR-3 categories plus wages, taxes), optional `counterparty`, `description`,
   `document_id` (same company only, else `422`).

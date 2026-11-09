@@ -406,6 +406,25 @@ const path = require("node:path");
         (await page.locator(".cash-total").count()) === 3 &&
         (await page.locator(".cash-total.negative").count()) === 0,
     );
+    // Codex review, PR #6: the server books it but the answer is lost; a second click must not double it.
+    let dropped = 0;
+    await page.route(/\/cashbook$/, async (route) => {
+      if (route.request().method() !== "POST" || dropped++) return route.continue();
+      await route.fetch();
+      await route.abort("connectionreset");
+    });
+    await page.locator("#c-kind").selectOption("expense");
+    await page.locator("#c-amount").fill("450");
+    await page.locator("#c-counterparty").fill("Synthetic retry");
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#notice").classList.contains("error"));
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#c-amount").value === "");
+    await page.unroute(/\/cashbook$/);
+    check(
+      "A retried payment after a lost response is booked once",
+      (await page.locator(".cash-entry").filter({ hasText: "Synthetic retry" }).count()) === 1,
+    );
     await page.locator("#c-kind").selectOption("expense");
     await page.locator("#c-amount").fill("300000");
     await page.locator("#c-method").selectOption("cash");

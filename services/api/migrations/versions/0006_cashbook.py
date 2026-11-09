@@ -25,6 +25,9 @@ def upgrade():
         voided_at TEXT NULL,
         voided_by TEXT NULL REFERENCES users(id),
         void_reason TEXT NULL,
+        idempotency_key TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        UNIQUE(organization_id, created_by, idempotency_key),
         CHECK((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL)
               OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)),
         FOREIGN KEY(document_id, organization_id) REFERENCES documents(id, organization_id)

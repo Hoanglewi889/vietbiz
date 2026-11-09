@@ -870,22 +870,24 @@ function recordPayment(invoice) {
 }
 async function saveCashEntry() {
   $("cash-error").textContent = "";
-  const amount = decimal($("c-amount").value) || "";
+  const body = {
+    kind: $("c-kind").value,
+    entry_date: $("c-date").value,
+    amount: decimal($("c-amount").value) || "",
+    currency: $("c-currency").value,
+    method: $("c-method").value,
+    category: $("c-category").value,
+    counterparty: $("c-counterparty").value,
+    description: $("c-description").value,
+    document_id: state.cashDoc,
+  };
   try {
+    // Same key until it succeeds: a retry after a lost response is not booked twice.
     await request(
       base() + "/cashbook",
-      json("POST", {
-        kind: $("c-kind").value,
-        entry_date: $("c-date").value,
-        amount,
-        currency: $("c-currency").value,
-        method: $("c-method").value,
-        category: $("c-category").value,
-        counterparty: $("c-counterparty").value,
-        description: $("c-description").value,
-        document_id: state.cashDoc,
-      }),
+      json("POST", body, retryKey("cash:" + state.org, body)),
     );
+    retries.delete("cash:" + state.org);
   } catch (error) {
     if (error.status === 422) $("cash-error").textContent = t("validation");
     throw error;

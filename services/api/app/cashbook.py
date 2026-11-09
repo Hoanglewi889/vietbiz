@@ -12,11 +12,12 @@ from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .archive import CATEGORIES as EXPENSE_DOCUMENT_CATEGORIES
 from .database import connection
+from .tasks import Key, digest, today_prague
 
 INCOME_CATEGORIES = ('sales', 'services', 'other')
 EXPENSE_CATEGORIES = (*EXPENSE_DOCUMENT_CATEGORIES, 'wages', 'taxes')
@@ -51,7 +52,8 @@ class EntryIn(BaseModel):
             raise ValueError(f'category must be one of {", ".join(allowed)} for {self.kind}')
         if Decimal(self.amount) <= 0:
             raise ValueError('amount must be positive')
-        if self.entry_date > date.today():
+        # The business day is Prague's, as in the form, not the server's clock.
+        if self.entry_date.isoformat() > today_prague():
             raise ValueError('entry_date cannot be in the future; record money when it moves')
         return self
 
@@ -71,6 +73,7 @@ def _money(value):
 
 def _entry(row):
     item = dict(row)
+    item.pop('request_hash', None)
     item['amount'] = _money(item['amount'])
     item['voided'] = item['voided_at'] is not None
     return item
@@ -129,21 +132,32 @@ def build_router(current_user, authorize, audit):
         return entries if include_voided else [e for e in entries if not e['voided']]
 
     @router.post('/cashbook', status_code=201)
-    def create_entry(org_id: str, body: EntryIn, uid: str = Depends(current_user)):
-        entry_id, now = str(uuid4()), datetime.now(timezone.utc).isoformat()
+    def create_entry(org_id: str, body: EntryIn, response: Response, idempotency_key: Key,
+                     uid: str = Depends(current_user)):
+        # A retried submission (lost response) returns the first entry instead of a second one.
+        entry_id, now, request_hash = str(uuid4()), datetime.now(timezone.utc).isoformat(), digest(body)
         with connection() as db:
             authorize(db, uid, org_id, ('owner', 'accountant'))
             if body.document_id is not None and db.execute(
                     'SELECT 1 FROM documents WHERE id=? AND organization_id=?',
                     (body.document_id, org_id)).fetchone() is None:
                 raise HTTPException(422, 'Unknown document for this company')
-            db.execute(f'INSERT INTO cashbook_entries(organization_id,{COLUMNS}) '
-                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                       (org_id, entry_id, body.kind, body.entry_date.isoformat(), _money(body.amount), body.currency,
+            inserted = db.execute(
+                       f'INSERT INTO cashbook_entries(organization_id,idempotency_key,request_hash,{COLUMNS}) '
+                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) '
+                       'ON CONFLICT(organization_id,created_by,idempotency_key) DO NOTHING',
+                       (org_id, idempotency_key, request_hash, entry_id, body.kind, body.entry_date.isoformat(), _money(body.amount), body.currency,
                         body.method, body.category, body.counterparty, body.description, body.document_id,
                         uid, now, None, None, None))
-            audit(db, org_id, uid, 'cashbook.entry_created', body.document_id)
-            row = db.execute(f'SELECT {COLUMNS} FROM cashbook_entries WHERE id=?', (entry_id,)).fetchone()
+            row = db.execute(f'SELECT request_hash,{COLUMNS} FROM cashbook_entries WHERE organization_id=? '
+                             'AND created_by=? AND idempotency_key=?', (org_id, uid, idempotency_key)).fetchone()
+            if row['request_hash'] != request_hash:
+                raise HTTPException(409, 'Idempotency key already used for another entry')
+            if inserted.rowcount == 1:
+                audit(db, org_id, uid, 'cashbook.entry_created', body.document_id)
+            else:
+                response.status_code = 200
+            entry_id = row['id']
             same_day = [e for e in month_entries(db, org_id, body.entry_date.isoformat()[:7])
                         if e['entry_date'] == body.entry_date.isoformat()]
         entry = _entry(row)
