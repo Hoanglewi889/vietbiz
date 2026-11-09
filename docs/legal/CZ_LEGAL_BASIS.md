@@ -23,7 +23,10 @@ shown to customers. This is engineering input, not legal or tax advice.
 
 Simplified-document mandatory set = § 29 odst. 1 minus § 30a odst. 1 (derived; no
 statute lists it directly). Arithmetic tolerance (1 unit of currency) is a plausibility
-check, not a legal rule. Documents dated before 2024 are reported as outside the rule set.
+check, not a legal rule. Documents whose supply date (or, when none is stated, issue date) is
+before 2024 are reported as outside the rule set. A simplified document stays simplified
+when customer details are shown voluntarily; a full document needs the tax base even when
+exempt or reverse-charged (§ 29 odst. 3 písm. d) waives only rate and tax).
 
 ## Retention — design constraint, not implemented
 

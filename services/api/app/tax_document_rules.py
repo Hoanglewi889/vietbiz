@@ -97,11 +97,10 @@ def _amounts(doc: TaxDocument):
 def _document_kind(doc: TaxDocument) -> str:
     # § 30 odst. 2 písm. c): no simplified document when the customer declares the tax.
     # The 10 000 limit is in Kč, so a foreign-currency document is checked as a full one.
+    # Customer details shown voluntarily do not remove the § 30a allowance.
     if doc.reverse_charge or doc.currency.upper() != 'CZK' or doc.total is None or doc.total > SIMPLIFIED_LIMIT:
         return 'full'
-    if _blank(doc.customer_name) and _blank(doc.customer_vat_id):
-        return 'simplified'
-    return 'full'
+    return 'simplified'
 
 
 def check_tax_document(doc: TaxDocument, tolerance: Decimal = DEFAULT_TOLERANCE) -> CheckResult:
@@ -111,7 +110,9 @@ def check_tax_document(doc: TaxDocument, tolerance: Decimal = DEFAULT_TOLERANCE)
     if not isinstance(tolerance, Decimal):
         raise TypeError('tolerance must be Decimal')
 
-    if doc.issue_date is not None and doc.issue_date < RATES_FROM:
+    # The rate period follows the supply; § 29 odst. 1 písm. h) states it only when it differs from issue.
+    tax_point = doc.supply_date or doc.issue_date
+    if tax_point is not None and tax_point < RATES_FROM:
         return CheckResult('not_applicable', (Finding('rules_before_2024', UNSUPPORTED, 'issue_date', _basis('47'),
                                                        {'rules_from': RATES_FROM.isoformat()}),))
 
@@ -143,6 +144,9 @@ def check_tax_document(doc: TaxDocument, tolerance: Decimal = DEFAULT_TOLERANCE)
 
     if rate_needed and not doc.lines:
         findings.append(Finding('rate_missing', MISSING, 'lines', _basis('29 odst. 1 písm. k)')))
+    if kind == 'full' and not doc.lines:
+        # § 29 odst. 3 písm. d) waives rate and tax only; the base is still required.
+        findings.append(Finding('base_missing', MISSING, 'lines', _basis('29 odst. 1 písm. j)')))
 
     for index, line in enumerate(doc.lines):
         where = {'line': index}
@@ -152,9 +156,9 @@ def check_tax_document(doc: TaxDocument, tolerance: Decimal = DEFAULT_TOLERANCE)
         elif line.rate not in RATES:
             findings.append(Finding('rate_unsupported', UNSUPPORTED, 'rate', _basis('47'),
                                     {**where, 'rate': str(line.rate), 'known': [str(r) for r in RATES]}))
+        if kind == 'full' and line.base is None:
+            findings.append(Finding('base_missing', MISSING, 'base', _basis('29 odst. 1 písm. j)'), where))
         if kind == 'full' and rate_needed:
-            if line.base is None:
-                findings.append(Finding('base_missing', MISSING, 'base', _basis('29 odst. 1 písm. j)'), where))
             if line.tax is None:
                 findings.append(Finding('tax_missing', MISSING, 'tax', _basis('29 odst. 1 písm. l)'), where))
         if line.rate in RATES and line.base is not None and line.tax is not None:

@@ -165,3 +165,33 @@ def test_result_never_states_deductibility():
     result = check_tax_document(invoice())
     text = repr(result).lower()
     assert 'deduct' not in text and 'odpočet' not in text
+
+
+# Codex review on PR #2 -------------------------------------------------------
+
+def test_reverse_charge_and_exempt_full_documents_still_need_the_tax_base():
+    # § 29 odst. 3 písm. d) waives only the rate and tax amount, not the base (§ 29 odst. 1 písm. j).
+    for flags in ({'reverse_charge': True}, {'exempt': True}):
+        result = check_tax_document(invoice(**flags, lines=(VatLine(None),)))
+        assert 'base_missing' in codes(result) and not result.complete
+        assert 'tax_missing' not in codes(result) and 'rate_missing' not in codes(result)
+        empty = check_tax_document(invoice(**flags, lines=()))
+        assert 'base_missing' in codes(empty)
+
+
+def test_customer_details_do_not_remove_simplified_allowance():
+    # § 30a odst. 1 lets a simplified document omit base and tax; adding a customer does not change that.
+    result = check_tax_document(receipt(customer_name='Synthetic Potraviny s.r.o.', total=D('121.00'),
+                                        lines=(VatLine(D('21')),)))
+    assert result.kind == 'simplified'
+    assert result.findings == ()
+
+
+def test_rate_period_follows_the_supply_date():
+    late_invoice = receipt(issue_date=date(2024, 1, 5), supply_date=date(2023, 12, 31),
+                           lines=(VatLine(D('15'), D('100.00'), D('15.00')),), total=D('115.00'))
+    result = check_tax_document(late_invoice)
+    assert result.kind == 'not_applicable'
+    assert [f.code for f in result.findings] == ['rules_before_2024']
+    current = check_tax_document(receipt(issue_date=date(2023, 12, 20), supply_date=date(2024, 1, 2)))
+    assert current.kind == 'simplified' and current.findings == ()
