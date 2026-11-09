@@ -68,6 +68,8 @@ class LinesIn(BaseModel):
 class GroupIn(BaseModel):
     model_config = ConfigDict(extra='forbid')
     goods_group: GoodsGroup
+    # The line set the choice was made on; a replaced or reordered set is a conflict.
+    expected_version: int = Field(ge=1)
 
 
 def item_key(code, name):
@@ -112,6 +114,10 @@ def store_lines(db, org_id, uid, doc_id, lines: list[LineIn], source, expected_v
     if (current['version'] if current else None) != expected_version:
         raise HTTPException(409, 'The goods lines were changed by someone else; reload them')
     now = datetime.now(timezone.utc).isoformat()
+    # Codex review, PR #14: re-saving rows (which carry no group column) keeps a person's choice.
+    kept = {r['item_key']: r['goods_group'] for r in db.execute(
+        "SELECT item_key, goods_group FROM document_lines WHERE document_id=? AND organization_id=? "
+        "AND group_source='manual'", (doc_id, org_id))}
     if current:
         db.execute('DELETE FROM document_lines WHERE document_id=? AND organization_id=?', (doc_id, org_id))
         db.execute('UPDATE document_line_sets SET supplier_key=?,source=?,version=version+1,updated_by=?,'
@@ -125,7 +131,8 @@ def store_lines(db, org_id, uid, doc_id, lines: list[LineIn], source, expected_v
         if line.goods_group:
             _remember(db, org_id, uid, skey, key, line.goods_group, now)
     for number, (line, key) in enumerate(zip(lines, keys), start=1):
-        group, origin = line.goods_group, 'manual' if line.goods_group else None
+        group = line.goods_group or kept.get(key)
+        origin = 'manual' if group else None
         if group is None:
             group = _learned(db, org_id, skey, key)
             origin = 'learned' if group else None
@@ -134,6 +141,32 @@ def store_lines(db, org_id, uid, doc_id, lines: list[LineIn], source, expected_v
                    'unit,unit_price,vat_rate,net,goods_group,group_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                    (doc_id, org_id, number, line.item_code, key, line.name, _plain(line.quantity), line.unit,
                     _plain(line.unit_price), line.vat_rate, str(net.quantize(CENT)), group, origin))
+
+
+def reconcile_supplier(db, org_id, uid, doc_id, fields):
+    """After the invoice header changes supplier, move the goods lines to the new supplier.
+
+    Codex review, PR #14: learned groups came from the old supplier's catalogue, so they are
+    looked up again under the new one (or cleared); manual choices stay and are remembered for
+    the new supplier. Called inside the transaction that stores the new header revision.
+    """
+    current = db.execute('SELECT supplier_key FROM document_line_sets WHERE document_id=? AND organization_id=?',
+                         (doc_id, org_id)).fetchone()
+    skey = supplier_key(fields) or 'unknown'
+    if current is None or current['supplier_key'] == skey:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute('UPDATE document_line_sets SET supplier_key=?, version=version+1, updated_by=?, updated_at=? '
+               'WHERE document_id=? AND organization_id=?', (skey, uid, now, doc_id, org_id))
+    for line in db.execute('SELECT line_no, item_key, goods_group, group_source FROM document_lines '
+                           'WHERE document_id=? AND organization_id=?', (doc_id, org_id)).fetchall():
+        if line['group_source'] == 'manual':
+            _remember(db, org_id, uid, skey, line['item_key'], line['goods_group'], now)
+            continue
+        group = _learned(db, org_id, skey, line['item_key'])
+        db.execute('UPDATE document_lines SET goods_group=?, group_source=? WHERE document_id=? '
+                   'AND organization_id=? AND line_no=?',
+                   (group, 'learned' if group else None, doc_id, org_id, line['line_no']))
 
 
 def import_goods_lines(db, org_id, uid, doc_id, raw) -> bool:
@@ -228,20 +261,30 @@ def build_router(current_user, authorize, audit):
         with connection() as db:
             scope(db, uid, org_id, doc_id)
             db.execute('UPDATE organizations SET id=id WHERE id=?', (org_id,))
-            line = db.execute('SELECT l.item_key, s.supplier_key FROM document_lines l JOIN document_line_sets s '
-                              'ON s.document_id=l.document_id WHERE l.document_id=? AND l.organization_id=? '
-                              'AND l.line_no=?', (doc_id, org_id, line_no)).fetchone()
+            line = db.execute('SELECT l.item_key, s.supplier_key, s.version FROM document_lines l '
+                              'JOIN document_line_sets s ON s.document_id=l.document_id '
+                              'WHERE l.document_id=? AND l.organization_id=? AND l.line_no=?',
+                              (doc_id, org_id, line_no)).fetchone()
             if line is None:
                 raise HTTPException(404, 'Line not found')
+            if line['version'] != body.expected_version:
+                raise HTTPException(409, 'The goods lines were changed by someone else; reload them')
             db.execute("UPDATE document_lines SET goods_group=?, group_source='manual' WHERE document_id=? "
                        'AND organization_id=? AND line_no=?', (body.goods_group, doc_id, org_id, line_no))
             _remember(db, org_id, uid, line['supplier_key'], line['item_key'], body.goods_group, now)
             # The same supplier's item elsewhere follows, unless a person chose its group there.
-            changed = db.execute(
-                "UPDATE document_lines SET goods_group=?, group_source='learned' WHERE organization_id=? "
-                "AND item_key=? AND (group_source IS NULL OR group_source='learned') AND document_id IN "
-                '(SELECT document_id FROM document_line_sets WHERE organization_id=? AND supplier_key=?)',
-                (body.goods_group, org_id, line['item_key'], org_id, line['supplier_key'])).rowcount
+            follow = ("organization_id=? AND item_key=? AND (group_source IS NULL OR group_source='learned') "
+                      'AND (goods_group IS NULL OR goods_group<>?) AND document_id IN (SELECT document_id FROM '
+                      'document_line_sets WHERE organization_id=? AND supplier_key=?)')
+            scope_args = (org_id, line['item_key'], body.goods_group, org_id, line['supplier_key'])
+            touched = {r['document_id'] for r in db.execute(
+                f'SELECT DISTINCT document_id FROM document_lines WHERE {follow}', scope_args)} | {doc_id}
+            changed = db.execute(f"UPDATE document_lines SET goods_group=?, group_source='learned' WHERE {follow}",
+                                 (body.goods_group, *scope_args)).rowcount
+            # Every set whose lines changed gets a new version, so stale editors get a conflict.
+            for touched_doc in touched:
+                db.execute('UPDATE document_line_sets SET version=version+1, updated_by=?, updated_at=? '
+                           'WHERE document_id=? AND organization_id=?', (uid, now, touched_doc, org_id))
             audit(db, org_id, uid, 'goods.group_set', doc_id)
             return {**_payload(db, org_id, doc_id), 'also_updated': changed}
 

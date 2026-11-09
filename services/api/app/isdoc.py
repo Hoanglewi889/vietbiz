@@ -173,7 +173,10 @@ def goods_lines(xml: bytes) -> list[dict]:
     """
     root = ET.fromstring(xml)
     out = []
-    for line in root.findall(_q('InvoiceLines/InvoiceLine'))[:500]:
+    found = root.findall(_q('InvoiceLines/InvoiceLine'))
+    if len(found) > 500:  # Codex review, PR #14: too many to store means none, not the first 500
+        return []
+    for line in found:
         quantity = line.find(_q('InvoicedQuantity'))
         try:
             qty = Decimal((quantity.text or '').strip()) if quantity is not None else None

@@ -84,8 +84,18 @@ function renderGoodsLines() {
       run(async () => {
         if (!select.value) return;
         const x = state.extract;
-        const saved = await request(linesUrl(goods.doc) + "/" + line.line_no + "/group",
-          json("PUT", { goods_group: select.value }));
+        let saved;
+        try {
+          saved = await request(linesUrl(goods.doc) + "/" + line.line_no + "/group",
+            json("PUT", { goods_group: select.value, expected_version: data.version }));
+        } catch (error) {
+          // Codex review, PR #14: the set changed meanwhile; show the current lines instead.
+          if (error.status === 409 && state.extract === x) {
+            await loadGoodsLines();
+            throw { messageKey: "goodsConflict" };
+          }
+          throw error;
+        }
         if (state.extract !== x) return;
         goods.data = saved;
         renderGoodsLines();
