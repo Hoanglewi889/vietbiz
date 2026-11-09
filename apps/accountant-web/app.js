@@ -185,6 +185,7 @@ function resetContext() {
   if (!$("cash-view").hidden) setTab("tasks");
   if (invoicesReady()) resetInvoices();
   if (typeof resetPortfolio === "function") resetPortfolio();
+  if (typeof resetSuppliers === "function") resetSuppliers();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
@@ -573,6 +574,7 @@ async function loadDocs() {
   state.shown = archive ? archive.items : docs;
   state.summary = archive ? archive.summary : null;
   renderDocs();
+  if (typeof loadSuppliers === "function") loadSuppliers(finance).catch(() => {});
 }
 function renderSummary() {
   const box = $("archive-summary"),
@@ -1208,6 +1210,7 @@ function translate() {
   if (invoicesReady()) translateInvoices();
   if (typeof renderLegal === "function") renderLegal();
   if (typeof renderPortfolio === "function") renderPortfolio();
+  if (typeof renderSuppliers === "function") renderSuppliers();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();

@@ -220,3 +220,18 @@ company where the user is **accountant or owner** (employee memberships are left
 `last_activity_at`, `attention` (`high` if any overdue task, `medium` if documents wait for
 review or changes, else `low`). Sorted by attention, then documents to review, then name.
 Counts only; no document data leaves its company. No schema change.
+
+## CR-7 · Supplier and category breakdown; categories learnt per supplier
+
+- Requested by: Claude for the owner, 2026-11-09 · Implemented in: `claude/supplier-insights`
+- Status: proposed in PR · Depends on: CR-3
+
+- After every invoice-data revision (manual or ISDOC), an **uncategorised** document takes the
+  category this company last gave the same supplier (same DIČ; without a DIČ, the name before
+  the first comma). Never across companies, never over a manual choice, never a guess without
+  history. Audit `document.auto_categorized`.
+- `GET /v1/organizations/{org_id}/suppliers[?year=YYYY]` (owner, accountant) → `{items,
+  uncategorised_documents, by_category, categories}`; per supplier `key`, `name`, `vat_id`,
+  `documents`, `last_date`, `totals` per currency (`total`, `tax`), most used `category`,
+  `months` (CZK totals per `YYYY-MM`). Sorted by CZK total. Uses each document's latest revision;
+  documents without invoice data are skipped. No schema change.

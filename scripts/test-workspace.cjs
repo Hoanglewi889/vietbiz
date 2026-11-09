@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -331,6 +331,13 @@ const path = require("node:path");
     await page.waitForFunction(() => document.querySelectorAll(".document").length === 2);
     await page.locator("#f-category").selectOption("goods");
     await page.waitForFunction(() => document.querySelectorAll(".document").length === 1);
+    await waitText("#category-bars", "Hàng hóa để bán");
+    check(
+      "Spending is split by supplier and by category",
+      (await page.locator("#supplier-panel").isVisible()) &&
+        (await page.locator("#supplier-list .supplier-row").count()) >= 1 &&
+        (await page.locator("#category-bars").innerText()).includes("Hàng hóa để bán"),
+    );
     check(
       "Category filter shows only categorised documents",
       (await page.locator(".document strong").first().innerText()).includes(

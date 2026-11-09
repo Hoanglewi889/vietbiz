@@ -10,6 +10,7 @@
     <script src="invoices.js" defer></script>
     <script src="legal.js" defer></script>
     <script src="portfolio.js" defer></script>
+    <script src="suppliers.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -201,6 +202,17 @@
           ></button>
         </form>
         <p id="archive-summary" class="archive-summary" aria-live="polite" hidden></p>
+        <section id="supplier-panel" class="supplier-panel" hidden aria-labelledby="supplier-title">
+          <div class="supplier-col">
+            <h3 id="supplier-title" data-i18n="suppliersTitle"></h3>
+            <p class="muted small" data-i18n="autoCategoryHint"></p>
+            <div id="supplier-list" class="supplier-list"></div>
+          </div>
+          <div class="supplier-col">
+            <h3 data-i18n="categoriesTitle"></h3>
+            <div id="category-bars" class="supplier-list"></div>
+          </div>
+        </section>
         <div id="document-list" class="document-list"></div>
       </section>
       <section id="cash-view" class="panel" hidden>
