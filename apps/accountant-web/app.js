@@ -24,6 +24,9 @@ const state = {
   extract: null,
   extractTicket: 0,
   summary: null,
+  cash: null,
+  cashTicket: 0,
+  cashDoc: null,
 };
 const retries = new Map();
 const text = (tag, content, className = "") => {
@@ -173,6 +176,18 @@ function resetContext() {
   $("archive-filters").hidden = true;
   $("archive-summary").hidden = true;
   state.summary = null;
+  state.cash = null;
+  state.cashTicket++;
+  state.cashDoc = null;
+  $("cash-tab").hidden = true;
+  if (!$("cash-view").hidden) setTab("tasks");
+  $("cash-form").reset();
+  $("cash-month").value = pragueToday().slice(0, 7);
+  $("c-date").value = pragueToday();
+  $("c-linked").hidden = true;
+  $("cash-error").textContent = "";
+  $("cash-report").replaceChildren();
+  $("cash-list").replaceChildren();
   $("role-badge").textContent = "";
   $("document-list").replaceChildren();
   for (const n of ["active", "waiting", "overdue", "done"])
@@ -220,13 +235,15 @@ async function switchOrg() {
   $("role-badge").textContent = t(org.role);
   $("new-task").disabled = !["owner", "accountant"].includes(state.role);
   $("upload-button").disabled = !["owner", "employee"].includes(state.role);
+  $("cash-tab").hidden = !FINANCE_ROLES.includes(state.role);
+  if ($("cash-tab").hidden && !$("cash-view").hidden) setTab("tasks");
   $("status-filter").value = "";
   $("overdue-filter").checked = false;
   await refresh();
 }
 async function refresh() {
   if (!state.org) return;
-  await Promise.all([loadDocs(), loadTasks(), loadSummary()]);
+  await Promise.all([loadDocs(), loadTasks(), loadSummary(), loadCash()]);
   if (state.task) await selectTask(state.task.id);
 }
 async function loadSummary() {
@@ -652,6 +669,236 @@ function renderDocs() {
   renderSummary();
   if (!state.shown.length) empty(list, t("noDocuments"));
 }
+// Cashbook (CR-4): money actually received or paid, voided instead of deleted.
+const pragueToday = () =>
+  new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(
+    new Date(),
+  );
+const cashCategories = (kind) =>
+  kind === "income"
+    ? COPY[lang].incomeCategories
+    : { ...COPY[lang].categories, ...COPY[lang].cashCategories };
+const categoryName = (kind, key) => cashCategories(kind)[key] || key;
+function renderCashOptions() {
+  const method = $("c-method"),
+    category = $("c-category"),
+    chosen = [method.value, category.value];
+  method.replaceChildren(
+    ...Object.entries(COPY[lang].methods).map(([k, v]) => option(k, v)),
+  );
+  category.replaceChildren(
+    ...Object.entries(cashCategories($("c-kind").value)).map(([k, v]) =>
+      option(k, v),
+    ),
+  );
+  if (chosen[0]) method.value = chosen[0];
+  if (chosen[1]) category.value = chosen[1];
+  if (!category.value) category.selectedIndex = 0;
+}
+async function loadCash() {
+  if (!state.org || !FINANCE_ROLES.includes(state.role)) return;
+  const ticket = ++state.cashTicket,
+    month = $("cash-month").value || pragueToday().slice(0, 7),
+    query = "?month=" + encodeURIComponent(month);
+  const [book, report] = await Promise.all([
+    request(base() + "/cashbook" + query + "&include_voided=true"),
+    request(base() + "/reports/monthly" + query),
+  ]);
+  if (ticket !== state.cashTicket) return;
+  state.cash = { book, report };
+  renderCash();
+}
+function breakdown(title, rows) {
+  const box = text("div", ""),
+    list = document.createElement("dl");
+  box.append(text("strong", title), list);
+  for (const [name, value] of rows) list.append(text("dt", name), text("dd", value));
+  return box;
+}
+function renderCash() {
+  const { book, report } = state.cash,
+    box = $("cash-report");
+  box.replaceChildren(text("h3", fill(t("reportTitle"), { month: report.month })));
+  const currencies = Object.entries(report.totals);
+  if (!currencies.length) box.append(text("p", t("noEntries"), "muted"));
+  for (const [currency, sum] of currencies) {
+    const totals = text("div", "", "cash-totals");
+    for (const [key, value] of [
+      ["income", sum.income],
+      ["expense", sum.expense],
+      ["result", sum.result],
+    ]) {
+      const card = text("div", "", "cash-total");
+      if (key === "result" && Number(value) < 0) card.classList.add("negative");
+      card.append(text("span", t(key) + " · " + currency), text("strong", money(value, currency)));
+      totals.append(card);
+    }
+    const parts = text("div", "", "cash-breakdown");
+    parts.append(
+      breakdown(
+        t("byCategory"),
+        [
+          ...Object.entries(sum.income_by_category).map(([k, v]) => [
+            "+ " + categoryName("income", k),
+            money(v, currency),
+          ]),
+          ...Object.entries(sum.expense_by_category).map(([k, v]) => [
+            "− " + categoryName("expense", k),
+            money(v, currency),
+          ]),
+        ],
+      ),
+      breakdown(
+        t("byMethod"),
+        Object.entries(sum.by_method)
+          .filter(([, v]) => Number(v.income) || Number(v.expense))
+          .map(([m, v]) => [
+            COPY[lang].methods[m],
+            "+" + money(v.income, currency) + " / −" + money(v.expense, currency),
+          ]),
+      ),
+    );
+    box.append(totals, parts);
+  }
+  for (const f of report.findings)
+    box.append(
+      text(
+        "p",
+        fill(t("cashLimit"), {
+          total: money(f.total, "CZK"),
+          who: f.counterparty || t("unknownCounterparty"),
+          date: f.date,
+          limit: money(f.limit, "CZK"),
+          reference: f.reference,
+        }),
+        "cash-warning",
+      ),
+    );
+  if (report.unrecorded_invoices.length) {
+    const list = text("div", "", "cash-unrecorded");
+    list.append(text("strong", t("unrecorded")));
+    for (const u of report.unrecorded_invoices) {
+      const row = text("div", "");
+      row.append(
+        text(
+          "span",
+          [u.supplier_name || u.filename, u.issue_date, money(u.total, u.currency)]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+        button(t("recordPayment"), () => recordPayment(u)),
+      );
+      list.append(row);
+    }
+    box.append(list);
+  }
+  box.append(text("p", t("reportBasis"), "muted small"));
+  renderCashList(book.items);
+}
+function renderCashList(items) {
+  const list = $("cash-list");
+  list.replaceChildren();
+  for (const e of items) {
+    const row = text("div", "", "cash-entry" + (e.voided ? " voided" : "")),
+      info = text("div", "");
+    info.append(
+      text(
+        "strong",
+        categoryName(e.kind, e.category) + (e.counterparty ? " · " + e.counterparty : ""),
+      ),
+      text(
+        "small",
+        [e.entry_date, COPY[lang].methods[e.method], e.description, e.voided ? t("voided") + ": " + e.void_reason : ""]
+          .filter(Boolean)
+          .join(" · "),
+      ),
+    );
+    row.append(
+      info,
+      text(
+        "span",
+        (e.kind === "income" ? "+" : "−") + money(e.amount, e.currency),
+        "cash-amount " + e.kind,
+      ),
+    );
+    if (!e.voided) {
+      const voidButton = button(t("voidEntry"), () => askVoid(row, e, voidButton));
+      row.append(voidButton);
+    }
+    list.append(row);
+  }
+  if (!items.length) empty(list, t("noEntries"));
+}
+function askVoid(row, entry, trigger) {
+  const form = text("form", "", "void-form"),
+    reason = document.createElement("input");
+  reason.maxLength = 300;
+  reason.placeholder = t("voidReason");
+  reason.setAttribute("aria-label", t("voidReason"));
+  const confirm = text("button", t("confirmVoid"), "secondary");
+  confirm.type = "submit";
+  form.append(reason, confirm);
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    run(async () => {
+      await request(
+        base() + "/cashbook/" + encodeURIComponent(entry.id) + "/void",
+        json("POST", { reason: reason.value.trim() }),
+      );
+      await loadCash();
+      notice(t("saved"));
+    }, confirm);
+  };
+  trigger.replaceWith(form);
+  reason.focus();
+}
+function recordPayment(invoice) {
+  $("c-kind").value = "expense";
+  renderCashOptions();
+  $("c-amount").value = invoice.total;
+  $("c-currency").value = invoice.currency;
+  $("c-method").value = "bank";
+  $("c-counterparty").value = invoice.supplier_name || "";
+  const doc = state.docs.find((d) => d.id === invoice.document_id);
+  $("c-category").value = doc?.category || "goods";
+  state.cashDoc = invoice.document_id;
+  $("c-linked").textContent = fill(t("paymentFor"), {
+    name: invoice.supplier_name || invoice.filename,
+  });
+  $("c-linked").hidden = false;
+  $("c-amount").focus();
+}
+async function saveCashEntry() {
+  $("cash-error").textContent = "";
+  const body = {
+    kind: $("c-kind").value,
+    entry_date: $("c-date").value,
+    amount: decimal($("c-amount").value) || "",
+    currency: $("c-currency").value,
+    method: $("c-method").value,
+    category: $("c-category").value,
+    counterparty: $("c-counterparty").value,
+    description: $("c-description").value,
+    document_id: state.cashDoc,
+  };
+  try {
+    // Same key until it succeeds: a retry after a lost response is not booked twice.
+    await request(
+      base() + "/cashbook",
+      json("POST", body, retryKey("cash:" + state.org, body)),
+    );
+    retries.delete("cash:" + state.org);
+  } catch (error) {
+    if (error.status === 422) $("cash-error").textContent = t("validation");
+    throw error;
+  }
+  for (const id of ["c-amount", "c-counterparty", "c-description"]) $(id).value = "";
+  state.cashDoc = null;
+  $("c-linked").hidden = true;
+  $("cash-month").value = $("c-date").value.slice(0, 7);
+  await loadCash();
+  notice(t("saved"));
+}
 async function download(id) {
   const blob = await request(
       base() + "/documents/" + encodeURIComponent(id) + "/original",
@@ -944,12 +1191,14 @@ function translate() {
   );
   filter.value = value;
   renderFilterOptions();
+  renderCashOptions();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
   if (state.org) {
     renderTasks();
     renderDocs();
+    if (state.cash) renderCash();
   } else empty($("task-list"), t("startTitle"), t("startText"), "↗");
   renderDetail();
   if (state.extract) renderExtractionState();
@@ -964,7 +1213,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["tasks", "docs"]) {
+  for (const name of ["tasks", "docs", "cash"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
@@ -1224,6 +1473,18 @@ $("f-clear").onclick = () => {
 };
 $("tasks-tab").onclick = () => setTab("tasks");
 $("docs-tab").onclick = () => setTab("docs");
+$("cash-tab").onclick = () => setTab("cash");
+$("cash-month").value = pragueToday().slice(0, 7);
+$("c-date").value = pragueToday();
+$("cash-month").onchange = () => run(() => loadCash());
+$("c-kind").onchange = () => {
+  $("c-category").value = "";
+  renderCashOptions();
+};
+$("cash-form").onsubmit = (e) => {
+  e.preventDefault();
+  run(saveCashEntry, $("cash-submit"));
+};
 if (
   ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname) &&
   location.port !== "3000"

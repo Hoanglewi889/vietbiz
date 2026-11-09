@@ -141,3 +141,36 @@ DIČ, number, month, category or status, and see totals for the current filter.
   so concurrent identical uploads keep one (tested with a barrier).
 - Not yet: archive pagination (filtering runs in Python over the company's documents), a
   retention lock (there is no delete endpoint today), OCR-based duplicate detection.
+
+## CR-4 · Cashbook and monthly report
+
+- Requested by: Claude, 2026-11-09 · Implemented in: `claude/cashbook`
+- Status: proposed in PR, awaiting Codex review · Depends on: CR-3
+
+Owners and accountants record money that actually came in or went out, and see a monthly
+overview. It is a management view on a cash basis, not a tax return or a statement of tax due.
+
+| Method | Path | Roles | Result |
+| --- | --- | --- | --- |
+| `POST` | `/v1/organizations/{org_id}/cashbook` + header `Idempotency-Key` | owner, accountant | `201` entry with `findings` · `200` same entry on a retry · `409` key reused for another entry · `422` invalid · `403` |
+| `GET` | `/v1/organizations/{org_id}/cashbook?month=YYYY-MM&include_voided=` | owner, accountant | `200 {month, items, totals, findings, categories}` |
+| `POST` | `/v1/organizations/{org_id}/cashbook/{entry_id}/void` `{"reason": "…"}` | owner, accountant | `200` · `409` already voided · `404` other company |
+| `GET` | `/v1/organizations/{org_id}/reports/monthly?month=YYYY-MM` | owner, accountant | `200 {month, entries, totals, findings, unrecorded_invoices, basis: "cash", is_tax_return: false}` |
+
+- Entry: `kind` income/expense, `entry_date` (not after today in Europe/Prague), positive `amount` (≤ 2 decimals),
+  `currency` CZK/EUR, `method` cash/card/bank, `category` (income: sales, services, other;
+  expense: the CR-3 categories plus wages, taxes), optional `counterparty`, `description`,
+  `document_id` (same company only, else `422`).
+- Entries are never edited or deleted; a void keeps the row with who, when and why, and drops
+  it from totals. Audit events `cashbook.entry_created`, `cashbook.entry_voided`.
+- `totals` per currency: income, expense, result, by category and by payment method.
+- `findings`: `cash_limit_exceeded` when CZK cash entries with the same counterparty, direction
+  and day sum above 270 000 Kč (§ 4 zákona č. 254/2004 Sb.); an entry without a counterparty is
+  checked on its own.
+- `unrecorded_invoices`: approved archive documents issued that month with no active cashbook
+  entry linked, so the owner sees what is approved but not yet recorded as paid. Archive
+  invoices are never added to totals directly, so nothing is counted twice.
+- Migration `0006_cashbook`: table `cashbook_entries` with CHECKs and a composite foreign key
+  to `documents(id, organization_id)`.
+- Not yet: EUR cash against the limit (needs the ČNB rate of the day), partial payments of one
+  invoice, employees recording the till, VAT in the report (comes with issued invoices).

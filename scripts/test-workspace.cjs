@@ -390,6 +390,121 @@ const path = require("node:path");
         path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "archive-desktop.png"),
         fullPage: true,
       });
+    // Cashbook and monthly report (CR-4).
+    await page.locator("#cash-tab").click();
+    await page.locator("#cash-report h3").waitFor();
+    check("Cashbook tab opens for the owner", await page.locator("#cash-view").isVisible());
+    await page.locator("#c-kind").selectOption("income");
+    await page.locator("#c-amount").fill("12 500,50");
+    await page.locator("#c-method").selectOption("cash");
+    await page.locator("#c-category").selectOption("sales");
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelectorAll(".cash-entry").length === 1);
+    check(
+      "Income with a Czech decimal comma is recorded and totalled",
+      (await page.locator(".cash-entry").first().innerText()).includes("Tiền bán hàng") &&
+        (await page.locator(".cash-total").count()) === 3 &&
+        (await page.locator(".cash-total.negative").count()) === 0,
+    );
+    // Codex review, PR #6: the server books it but the answer is lost; a second click must not double it.
+    let dropped = 0;
+    await page.route(/\/cashbook$/, async (route) => {
+      if (route.request().method() !== "POST" || dropped++) return route.continue();
+      await route.fetch();
+      await route.abort("connectionreset");
+    });
+    await page.locator("#c-kind").selectOption("expense");
+    await page.locator("#c-amount").fill("450");
+    await page.locator("#c-counterparty").fill("Synthetic retry");
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#notice").classList.contains("error"));
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#c-amount").value === "");
+    await page.unroute(/\/cashbook$/);
+    check(
+      "A retried payment after a lost response is booked once",
+      (await page.locator(".cash-entry").filter({ hasText: "Synthetic retry" }).count()) === 1,
+    );
+    await page.locator("#c-kind").selectOption("expense");
+    await page.locator("#c-amount").fill("300000");
+    await page.locator("#c-method").selectOption("cash");
+    await page.locator("#c-category").selectOption("equipment");
+    await page.locator("#c-counterparty").fill("Synthetic Auto s.r.o.");
+    await page.locator("#cash-submit").click();
+    await waitText("#cash-report", "254/2004");
+    check(
+      "Cash above the legal limit is flagged with the law",
+      (await page.locator(".cash-warning").innerText()).includes("§ 4 zákona č. 254/2004 Sb.") &&
+        (await page.locator(".cash-total.negative").count()) === 1,
+    );
+    await page
+      .locator(".cash-entry")
+      .filter({ hasText: "Synthetic Auto" })
+      .getByRole("button", { name: "Hủy khoản" })
+      .click();
+    await page.locator(".void-form input").fill("Synthetic: wrong amount");
+    await page.locator(".void-form button").click();
+    await page.waitForFunction(() => !document.querySelector(".cash-warning"));
+    check(
+      "Voiding keeps the entry visible and removes it from totals",
+      (await page.locator(".cash-entry.voided").count()) === 1 &&
+        (await page.locator(".cash-entry.voided").innerText()).includes("wrong amount") &&
+        (await page.locator(".cash-total.negative").count()) === 0,
+    );
+    await page.locator("#cash-month").fill("2026-10");
+    await page.locator("#cash-month").dispatchEvent("change");
+    await waitText("#cash-report", "Hóa đơn đã duyệt nhưng chưa ghi thanh toán");
+    await page.locator(".cash-unrecorded button").first().click();
+    check(
+      "An approved invoice pre-fills its payment",
+      (await page.locator("#c-amount").inputValue()) === "3208.00" &&
+        (await page.locator("#c-linked").isVisible()),
+    );
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#c-linked").hidden);
+    await page.locator("#cash-month").fill("2026-10");
+    await page.locator("#cash-month").dispatchEvent("change");
+    await page.waitForFunction(() => !document.querySelector(".cash-unrecorded"));
+    check(
+      "A recorded payment leaves the unpaid invoice list",
+      (await page.locator(".cash-unrecorded").count()) === 0,
+    );
+    await page.locator("#language").selectOption("cs");
+    check(
+      "Cashbook is translated to Czech",
+      (await page.locator("#cash-tab").innerText()) === "Příjmy a výdaje" &&
+        (await page.locator("#cash-report h3").innerText()).startsWith("Měsíc"),
+    );
+    await page.locator("#language").selectOption("vi");
+    await page.locator("#cash-month").fill(await page.evaluate(() =>
+      new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Prague" }).format(new Date()).slice(0, 7)));
+    await page.locator("#cash-month").dispatchEvent("change");
+    await page.waitForFunction(() => document.querySelectorAll(".cash-entry").length >= 2);
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "cashbook-desktop.png"),
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "Cashbook fits a 390 px screen",
+      await page.evaluate(() => {
+        const view = document.querySelector("#cash-view");
+        const edge = view.getBoundingClientRect().right -
+          parseFloat(getComputedStyle(view).paddingRight);
+        return (
+          document.documentElement.scrollWidth <= innerWidth &&
+          [...view.querySelectorAll("input, select, button, .cash-total, .cash-entry")]
+            .every((el) => el.getBoundingClientRect().right <= edge + 1)
+        );
+      }),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "cashbook-mobile.png"),
+        fullPage: true,
+      });
+    await page.setViewportSize({ width: 1440, height: 1100 });
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });
