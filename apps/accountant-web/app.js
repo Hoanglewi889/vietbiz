@@ -718,8 +718,10 @@ async function loadExtraction() {
   }
   if (state.extract !== x) return;
   fillForm(x.data?.fields);
+  x.saved = JSON.stringify(readForm());
   renderExtractionState();
 }
+const unsavedEdits = (x) => x.saved !== JSON.stringify(readForm());
 async function openExtraction(id) {
   closeExtraction();
   const x = (state.extract = {
@@ -730,6 +732,7 @@ async function openExtraction(id) {
     ticket: ++state.extractTicket,
   });
   fillForm();
+  x.saved = JSON.stringify(readForm());
   renderExtractionState();
   $("extract-dialog").showModal();
   $("x-supplier_name").focus();
@@ -758,6 +761,7 @@ async function saveExtraction() {
     if (state.extract !== x) return;
     x.data = data;
     fillForm(data.fields);
+    x.saved = JSON.stringify(readForm());
     renderExtractionState();
     notice(t("saved"));
   } catch (error) {
@@ -773,6 +777,11 @@ async function saveExtraction() {
 }
 async function decideFromExtraction(decision) {
   const x = state.extract;
+  // A decision locks the data, so unsaved edits would be lost silently.
+  if (unsavedEdits(x)) {
+    $("extract-error").textContent = t("saveBeforeDecision");
+    return;
+  }
   try {
     await request(
       base() + "/documents/" + encodeURIComponent(x.doc) + "/review",

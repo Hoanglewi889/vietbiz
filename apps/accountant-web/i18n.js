@@ -153,6 +153,8 @@ const COPY = {
     checkDisclaimer:
       "Chỉ kiểm tra nội dung bắt buộc và phép tính. Đây không phải kết luận về khấu trừ thuế — kế toán quyết định.",
     dataLocked: "Chứng từ đã được quyết định; dữ liệu chỉ để xem.",
+    saveBeforeDecision:
+      "Lưu dữ liệu trước khi duyệt hoặc yêu cầu bổ sung — có thay đổi chưa lưu.",
     dataConflict:
       "Dữ liệu vừa được người khác sửa hoặc chứng từ đã được duyệt. Đã tải lại bản mới nhất.",
     revision: "Phiên bản",
@@ -348,6 +350,8 @@ const COPY = {
     checkDisclaimer:
       "Kontroluje jen povinné náležitosti a výpočty. Nejde o posouzení nároku na odpočet — rozhoduje účetní.",
     dataLocked: "O dokladu je rozhodnuto; údaje jsou jen ke čtení.",
+    saveBeforeDecision:
+      "Před schválením nebo vyžádáním doplnění uložte údaje — máte neuložené změny.",
     dataConflict:
       "Údaje mezitím změnil někdo jiný nebo byl doklad schválen. Načetli jsme aktuální verzi.",
     revision: "Verze",
