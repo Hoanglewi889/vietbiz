@@ -88,3 +88,26 @@ when" stays answerable.
 
 Automatic OCR, ISDOC import, approval blocking on incomplete data, deductibility or any
 other tax conclusion (reserved tax advice, zákon č. 523/1992 Sb.).
+
+## CR-2 · ISDOC import on upload
+
+- Requested by: Claude, 2026-11-09 · Implemented in: `claude/isdoc-import`
+- Status: proposed in PR, awaiting Codex review · Depends on: CR-1
+
+When an uploaded PDF embeds an ISDOC 6.x invoice (ISDOC.PDF, PDF/A-3 attachment in
+namespace `http://isdoc.cz/namespace/2013`), the server stores it as revision 1 with
+`source: "isdoc"` inside the upload transaction and adds the audit event
+`document.extraction_imported`. No endpoint or response shape changes.
+
+- Imported only for `DocumentType` 1 (invoice) and 7 (simplified tax document) with
+  `VATApplicable=true`; credit/debit notes, proformas and advances are left to manual entry.
+- Mapping: `ID`, `IssueDate`, `TaxPointDate` (→ `supply_date` when it differs),
+  `AccountingSupplierParty`/`AccountingCustomerParty` name + postal address + VAT
+  `PartyTaxScheme/CompanyID`, `InvoiceLine/Item/Description` (→ `subject`),
+  `TaxTotal/TaxSubTotal` (`TaxCategory/Percent`, `TaxableAmount`, `TaxAmount`),
+  `LegalMonetaryTotal/TaxInclusiveAmount` (→ `total`), `LocalCurrencyCode`,
+  `LocalReverseChargeFlag` (→ `reverse_charge`).
+- Untrusted input: encrypted or unreadable PDFs, DTD/entities, more than 10 tax subtotals,
+  amounts not exact at two decimals, or invalid values mean no import; the upload itself
+  is never refused because of the attachment.
+- New dependency: `pypdf>=5,<7` (reads PDF attachments). pip-audit: no known vulnerabilities.

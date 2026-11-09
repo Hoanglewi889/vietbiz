@@ -676,6 +676,9 @@ function renderExtractionState() {
   $("extract-approve").hidden = !decide;
   $("extract-request-changes").hidden = !decide;
   $("extract-error").textContent = x.locked ? t("dataLocked") : "";
+  const imported = x.data?.source === "isdoc";
+  $("x-source").textContent = t(imported ? "isdocSourceNotice" : "manualEntryNotice");
+  $("x-source").classList.toggle("imported", imported);
   renderLines(readLines());
   renderCheck();
 }

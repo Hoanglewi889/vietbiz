@@ -54,7 +54,11 @@ A new accounting act passed first reading on 2026-03-12, planned effective 2028-
   [vyfakturuj.cz](https://www.vyfakturuj.cz/fakturopedie/eet-2-0-je-schvalena-koho-se-tyka-a-co-se-zmeni-od-roku-2027/)).
   Sbírka number not verified.
 - **ISDOC 6.0.2** (2022-03-23), Ministry of the Interior; XSD, Schematron and ISDOC.PDF
-  ([MV ČR](https://archiv.mv.gov.cz/isdoc/clanek/aktualni-verze.aspx)).
+  ([MV ČR](https://archiv.mv.gov.cz/isdoc/clanek/aktualni-verze.aspx)). Implemented as
+  import of ISDOC embedded in uploaded PDFs (`app/isdoc.py`, CR-2); element names checked
+  against [isdoc-invoice-6.0.2.xsd](https://isdoc.cz/6.0.2/xsd/isdoc-invoice-6.0.2.xsd).
+  Not yet validated against the official XSD/Schematron in CI (isdoc.cz is not reachable
+  from the build sandbox).
 - **ViDA**: structured EN 16931 e-invoices for selected intra-EU B2B supplies from 2030-07-01
   ([dauc.cz](https://www.dauc.cz/clanek/497/e-invoicing-bude-povinny-jste-na-rok-2030-pripraveni)).
 - **AML** (zákon č. 253/2008 Sb.): external accountants are obliged persons; records 10 years

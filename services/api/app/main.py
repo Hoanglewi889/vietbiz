@@ -8,6 +8,7 @@ from typing import Literal
 import os
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -159,12 +160,15 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
     if not content:raise HTTPException(422,'Empty file')
     magic=(mime=='application/pdf' and content.startswith(b'%PDF-')) or (mime=='image/jpeg' and content.startswith(b'\xff\xd8\xff')) or (mime=='image/png' and content.startswith(b'\x89PNG\r\n\x1a\n'))
     if not magic:raise HTTPException(415,'MIME and file signature differ')
+    # PDF parsing is CPU-bound; keep it off the event loop.
+    isdoc_fields=await run_in_threadpool(read_isdoc,content) if mime=='application/pdf' else None
     did=str(uuid4()); org_dir=FILES / org_id;org_dir.mkdir(exist_ok=True)
     target=org_dir / (did+MIMES[mime]); target.write_bytes(content)
     try:
       with conn() as c:
         c.execute('INSERT INTO documents VALUES(?,?,?,?,?,?,?,?,?,?)',(did,org_id,uid,(file.filename or 'upload')[:200],mime,str(target),sha256(content).hexdigest(),len(content),'needs_review',datetime.now(timezone.utc).isoformat()))
         event(c,org_id,uid,'document.uploaded',did)
+        if record_isdoc(c,org_id,uid,did,isdoc_fields):event(c,org_id,uid,'document.extraction_imported',did)
     except Exception:
       target.unlink(missing_ok=True)
       raise
@@ -217,7 +221,8 @@ app.include_router(news_router)
 from .tasks import build_router
 app.include_router(build_router(current_user, authorize))
 
-from .extractions import build_router as build_extraction_router
+from .extractions import build_router as build_extraction_router, record_isdoc
+from .isdoc import from_pdf as read_isdoc
 app.include_router(build_extraction_router(current_user, authorize, event))
 
 # Serve the local demo from the API origin; API authorization is unchanged.

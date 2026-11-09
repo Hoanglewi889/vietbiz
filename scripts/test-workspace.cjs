@@ -240,6 +240,47 @@ const path = require("node:path");
       "Closing the dialog releases the original preview",
       (await page.locator("#extract-preview img").count()) === 0,
     );
+    // ISDOC.PDF: an owner uploads an e-invoice; its VAT data is read without typing.
+    await page.locator("#demo-role").selectOption({ label: "Chủ cửa hàng" });
+    await page.waitForFunction(
+      () => !document.querySelector("#upload-button").disabled,
+    );
+    await page.locator("#docs-tab").click();
+    await page
+      .locator("#upload-file")
+      .setInputFiles(path.join(__dirname, "fixtures", "synthetic-isdoc.pdf"));
+    await page.locator("#upload-button").click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".document").length === 2,
+    );
+    await page
+      .locator(".document")
+      .filter({ hasText: "synthetic-isdoc.pdf" })
+      .getByRole("button", { name: "Dữ liệu hóa đơn" })
+      .click();
+    await waitText("#x-source", "ISDOC");
+    await waitText("#check-body", "Phiên bản 1");
+    check(
+      "ISDOC data is read from the uploaded PDF",
+      (await page.locator("#x-supplier_vat_id").inputValue()) === "CZ00000001" &&
+        (await page.locator("#x-lines .vat-line").count()) === 2,
+    );
+    check(
+      "Imported ISDOC data passes the VAT Act check",
+      (await page.locator("#check-body").innerText()).includes(
+        "Đủ nội dung bắt buộc",
+      ),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR) {
+      await dialogTop();
+      await page.screenshot({
+        path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "isdoc-desktop.png"),
+      });
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(
+      () => !document.querySelector("#extract-dialog").open,
+    );
     await page.locator("#tasks-tab").click();
     if (process.env.VIETBIZ_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.VIETBIZ_SCREENSHOT_DIR, { recursive: true });
