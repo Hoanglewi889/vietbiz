@@ -12,6 +12,8 @@ const state = {
   orgs: [],
   tasks: [],
   docs: [],
+  shown: [],
+  docsTicket: 0,
   next: null,
   task: null,
   comments: [],
@@ -156,6 +158,7 @@ function resetContext() {
   state.role = "";
   state.tasks = [];
   state.docs = [];
+  state.shown = [];
   state.task = null;
   state.next = null;
   retries.clear();
@@ -528,16 +531,19 @@ function renderFilterOptions() {
 }
 async function loadDocs() {
   if (!state.org) return;
-  const finance = FINANCE_ROLES.includes(state.role);
+  // state.docs is always the company's full list (task links, dialogs); state.shown
+  // is what the archive filters currently select. Older responses are ignored.
+  const ticket = ++state.docsTicket,
+    finance = FINANCE_ROLES.includes(state.role);
   $("archive-filters").hidden = !finance;
-  if (finance) {
-    const body = await request(base() + "/archive" + archiveQuery());
-    state.docs = body.items;
-    state.summary = body.summary;
-  } else {
-    state.docs = await request(base() + "/documents");
-    state.summary = null;
-  }
+  const [docs, archive] = await Promise.all([
+    request(base() + "/documents"),
+    finance ? request(base() + "/archive" + archiveQuery()) : null,
+  ]);
+  if (ticket !== state.docsTicket) return;
+  state.docs = docs;
+  state.shown = archive ? archive.items : docs;
+  state.summary = archive ? archive.summary : null;
   renderDocs();
 }
 function renderSummary() {
@@ -582,7 +588,7 @@ function categorySelect(doc) {
 function renderDocs() {
   const list = $("document-list");
   list.replaceChildren();
-  for (const doc of state.docs) {
+  for (const doc of state.shown) {
     const row = text("div", "", "document"),
       info = text("div", "");
     const inv = doc.invoice;
@@ -644,7 +650,7 @@ function renderDocs() {
     list.append(row);
   }
   renderSummary();
-  if (!state.docs.length) empty(list, t("noDocuments"));
+  if (!state.shown.length) empty(list, t("noDocuments"));
 }
 async function download(id) {
   const blob = await request(
@@ -885,6 +891,7 @@ async function saveExtraction() {
     x.saved = JSON.stringify(readForm());
     renderExtractionState();
     notice(t("saved"));
+    await loadDocs(); // supplier, amounts, badges and totals follow the saved revision
   } catch (error) {
     if (error.status === 409 && state.extract === x) {
       await loadDocs();

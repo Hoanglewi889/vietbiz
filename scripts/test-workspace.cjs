@@ -311,6 +311,58 @@ const path = require("node:path");
     await page.locator("#upload-button").click();
     await waitText("#notice", "đã được tải lên trước đó");
     check("Identical file upload is refused", (await docCount()) === 2);
+    // Codex review, PR #5: a slower, older archive response must not replace a newer one.
+    let releaseSlow;
+    const slowGate = new Promise((resolve) => (releaseSlow = resolve));
+    await page.route(/\/archive\?q=slow/, async (route) => {
+      await slowGate;
+      await route.continue();
+    });
+    const slowSent = page.waitForRequest(/\/archive\?q=slow/);
+    await page.locator("#f-q").fill("slow");
+    await slowSent;
+    const fastDone = page.waitForResponse(/\/archive\?q=isdoc/);
+    await page.locator("#f-q").fill("isdoc");
+    await fastDone;
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 1);
+    const slowDone = page.waitForResponse(/\/archive\?q=slow/);
+    releaseSlow();
+    await slowDone;
+    await page.waitForTimeout(100);
+    check(
+      "An older archive response does not overwrite newer filter results",
+      (await docCount()) === 1 &&
+        (await page.locator("#f-q").inputValue()) === "isdoc",
+    );
+    await page.unroute(/\/archive\?q=slow/);
+    // Codex review, PR #5: saved invoice data updates the archive row at once.
+    await page
+      .locator(".document")
+      .getByRole("button", { name: "Dữ liệu hóa đơn" })
+      .click();
+    await waitText("#check-body", "Phiên bản 1");
+    await page.locator("#x-document_number").fill("SYN-EDITED-7");
+    await page.locator("#extract-save").click();
+    await waitText("#check-body", "Phiên bản 2");
+    await page.keyboard.press("Escape");
+    await waitText("#document-list", "SYN-EDITED-7");
+    check(
+      "Saving invoice data refreshes the archive row",
+      (await page.locator(".document").first().innerText()).includes("SYN-EDITED-7"),
+    );
+    // Codex review, PR #5: the task document picker ignores archive filters.
+    await page.locator("#f-q").fill("no-such-invoice");
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 0);
+    await page.locator("#tasks-tab").click();
+    await page.locator("#new-task").click();
+    check(
+      "Task document picker lists every document while a filter is active",
+      (await page.locator("#task-document option").count()) === 3,
+    );
+    await page.keyboard.press("Escape");
+    await page.locator("#docs-tab").click();
+    await page.locator("#f-clear").click();
+    await page.waitForFunction(() => document.querySelectorAll(".document").length === 2);
     await page.setViewportSize({ width: 390, height: 844 });
     check(
       "Archive view fits a 390 px screen",
