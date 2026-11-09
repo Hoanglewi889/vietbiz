@@ -688,6 +688,38 @@ const path = require("node:path");
     );
     await page.locator(".invoice-row").getByRole("button", { name: "Xem & in" }).click();
     await page.locator("#print-dialog[open]").waitFor();
+    await page.locator("#invoice-print .paper-qr img").waitFor();
+    check(
+      "A bank-paid invoice prints a QR Platba code; a VAT payer sees no threshold tracker",
+      (await page.locator("#invoice-print .paper-qr img").getAttribute("src")).startsWith("data:image/svg+xml") &&
+        (await page.locator("#vat-threshold").isHidden()),
+    );
+    // Codex review, PR #15: a late QR for an earlier print view is not added to the current one.
+    await page.locator("#close-print").click();
+    let releaseQr;
+    const qrGate = new Promise((resolve) => (releaseQr = resolve));
+    let heldQr = false;
+    await page.route(/\/payment-qr$/, async (route) => {
+      if (!heldQr) {
+        heldQr = true;
+        await qrGate;
+      }
+      await route.continue();
+    });
+    await page.locator(".invoice-row").getByRole("button", { name: "Xem & in" }).click();
+    await page.waitForFunction(() => document.querySelector("#print-dialog").open);
+    await page.locator("#close-print").click();
+    await page.locator(".invoice-row").getByRole("button", { name: "Xem & in" }).click();
+    await page.locator("#invoice-print .paper-qr img").waitFor();
+    const lateQr = page.waitForResponse(/\/payment-qr$/);
+    releaseQr();
+    await lateQr;
+    await page.waitForTimeout(200);
+    check(
+      "A late QR response for an earlier print view is ignored",
+      (await page.locator("#invoice-print .paper-qr img").count()) === 1,
+    );
+    await page.unroute(/\/payment-qr$/);
     const paper = await page.locator("#invoice-print").innerText();
     check(
       "The printable invoice carries the § 29 details in Czech",

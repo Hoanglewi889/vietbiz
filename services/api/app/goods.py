@@ -339,7 +339,7 @@ def build_router(current_user, authorize, audit):
         def amounts(values):
             return {u: _plain(v) for u, v in sorted(values.items())}
 
-        czk = lambda totals: totals.get('CZK', Decimal('0'))  # noqa: E731
+        czk = lambda totals: totals.get('CZK', Decimal('0'))
         return {
             'month': month, 'year': year, 'documents': len(documents),
             'groups': [{'group': key, 'totals': money(v['totals']), 'quantity': amounts(v['quantity']),

@@ -22,6 +22,11 @@ function portfolioStat(label, value, alert = false) {
     "portfolio-stat" + (value ? (alert ? " alert" : "") : " zero"),
   );
 }
+function replyDuration(minutes) {
+  if (minutes < 60) return minutes + " min";
+  if (minutes < 48 * 60) return Math.round(minutes / 60) + " h";
+  return Math.round(minutes / 1440) + (lang === "cs" ? " d" : " ngày");
+}
 function renderPortfolio() {
   const list = $("portfolio-list");
   list.replaceChildren();
@@ -57,6 +62,16 @@ function renderPortfolio() {
         date: shortDate(item.next_deadline.due_date),
         what: deadlineTitle(item.next_deadline.code),
       }), "portfolio-stat deadline"));
+    if (item.unanswered_messages)
+      stats.append(text("span", fill(t("unansweredMessages"), {
+        n: item.unanswered_messages,
+        since: timestamp(item.oldest_unanswered_at),
+      }), "portfolio-stat alert"));
+    if (item.median_reply_minutes !== null && item.median_reply_minutes !== undefined)
+      stats.append(text("span", fill(t("medianReply"), { m: replyDuration(item.median_reply_minutes) }), "portfolio-stat"));
+    if (item.vat_threshold && item.vat_threshold !== "ok")
+      stats.append(text("span", t("vatThresholdShort") + ": " + COPY[lang].vatThresholdStatus[item.vat_threshold],
+        "portfolio-stat" + (item.vat_threshold === "watch" ? "" : " alert")));
     if (item.profile_missing)
       stats.append(button(t("profileMissing"), () => openProfile(item.organization_id), "portfolio-stat alert"));
     const open = button(t("openCompany"), async () => {

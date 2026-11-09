@@ -13,7 +13,7 @@ const CUSTOMER_FIELDS = [
   "payment_method",
   "note",
 ];
-const inv = { profile: null, items: [], editing: null, ticket: 0 };
+const inv = { profile: null, items: [], editing: null, ticket: 0, threshold: null, printTicket: 0 };
 
 const addDays = (iso, days) => {
   const d = new Date(iso + "T12:00:00Z");
@@ -34,6 +34,8 @@ function resetInvoices() {
   $("invoice-form").hidden = true;
   $("invoice-list").replaceChildren();
   $("billing-error").textContent = "";
+  inv.threshold = null;
+  $("vat-threshold").hidden = true;
   if ($("print-dialog").open) $("print-dialog").close();
 }
 async function loadInvoices() {
@@ -41,13 +43,16 @@ async function loadInvoices() {
   if ($("invoices-tab").hidden && !$("invoices-view").hidden) setTab("tasks");
   if (!state.org || $("invoices-tab").hidden) return;
   const ticket = ++inv.ticket;
-  const [profile, list] = await Promise.all([
+  const [profile, list, threshold] = await Promise.all([
     request(base() + "/billing-profile"),
     request(base() + "/invoices"),
+    request(base() + "/vat-threshold"),
   ]);
   if (ticket !== inv.ticket) return;
   inv.profile = profile.profile;
   inv.items = list.items;
+  inv.threshold = threshold;
+  renderThreshold();
   fillProfile();
   renderInvoices();
 }
@@ -233,8 +238,46 @@ async function issueInvoice(invoice) {
   }
 }
 
+// CR-10: turnover against the VAT registration thresholds, for a business that is not a payer.
+function renderThreshold() {
+  const box = $("vat-threshold"),
+    data = inv.threshold;
+  box.hidden = !data || !data.applies;
+  if (box.hidden) return;
+  box.className = "vat-threshold " + data.status;
+  const bar = text("div", "", "threshold-bar"),
+    fillEl = document.createElement("span");
+  fillEl.style.width = Math.min(100, Math.round(Number(data.share) * 100)) + "%";
+  bar.append(fillEl);
+  const link = text("a", t("source"));
+  link.href = data.source;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  const note = text("small", fill(t("vatThresholdNote"), {
+    invoiced: czk(data.invoiced),
+    counter: czk(data.cash_and_card_sales),
+    bank: czk(data.bank_income_not_added),
+  }) + " ");
+  note.append(link);
+  const parts = [
+    text("strong", fill(t("vatThresholdLine"), { year: data.year, estimate: czk(data.estimate) })),
+    text("span", COPY[lang].vatThresholdStatus[data.status], "threshold-status"),
+  ];
+  // Cash/card-paid invoices may also be in the cashbook; the upper bound assumes they are not.
+  if (data.estimate_high !== data.estimate)
+    parts.push(text("small", fill(t("vatThresholdHigh"), {
+      high: czk(data.estimate_high),
+      status: COPY[lang].vatThresholdStatus[data.status_high],
+    })));
+  box.replaceChildren(
+    ...parts,
+    bar,
+    note,
+  );
+}
 function translateInvoices() {
   renderPaymentOptions();
+  renderThreshold();
   if (!$("invoice-form").hidden) renderInvoiceLines(readInvoiceLines());
   renderEditorTotals();
   if (state.org) renderInvoices();
@@ -302,6 +345,9 @@ function partyBlock(title, lines) {
   return box;
 }
 function showPrint(item) {
+  // Codex review, PR #15: every opened print view has its own ticket, so a late QR for an
+  // earlier invoice is never added to the one now shown.
+  const printTicket = ++inv.printTicket;
   const s = item.supplier,
     c = item.content,
     totals = item.totals,
@@ -372,6 +418,21 @@ function showPrint(item) {
   paper.append(text("p", "Celkem k úhradě: " + czk(totals.total), "paper-total"));
   if (c.note) paper.append(text("p", c.note, "paper-note"));
   $("print-dialog").showModal();
+  // CR-10: QR Platba for a bank transfer to the supplier's IBAN (server builds the SPAYD code).
+  if (item.status === "issued" && c.payment_method === "bank" && s.iban) {
+    const ticket = inv.ticket;
+    request(base() + "/invoices/" + encodeURIComponent(item.id) + "/payment-qr")
+      .then((qr) => {
+        if (ticket !== inv.ticket || printTicket !== inv.printTicket || !$("print-dialog").open) return;
+        const figure = text("figure", "", "paper-qr"),
+          img = document.createElement("img");
+        img.src = qr.image;
+        img.alt = "QR Platba " + item.number;
+        figure.append(img, text("figcaption", "QR Platba"));
+        paper.append(figure);
+      })
+      .catch(() => {});
+  }
 }
 
 $("invoices-tab").onclick = () => setTab("invoices");
