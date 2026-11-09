@@ -50,6 +50,18 @@ def test_portfolio_counts_work_per_company_and_puts_urgent_first():
     assert body['timezone'] == 'Europe/Prague'
 
 
+def test_task_work_counts_as_recent_activity():
+    owner, accountant = user('Activity owner'), user('Activity accountant')
+    org = company('Activity s.r.o.', owner, accountant)
+    before = portfolio(accountant)['items'][0]['last_activity_at']
+    made = task(org, accountant).json()
+    reply = c.post(f"/v1/organizations/{org}/tasks/{made['id']}/comments", headers={**h(owner), 'Idempotency-Key': str(uuid4())},
+                   json={'body': 'Synthetic reply', 'visibility': 'client'})
+    assert reply.status_code == 201, reply.text
+    after = portfolio(accountant)['items'][0]['last_activity_at']
+    assert after > before
+
+
 def test_portfolio_shows_only_the_users_finance_memberships():
     owner, accountant, employee, stranger = (user(n) for n in ('Scope owner', 'Scope acc', 'Scope emp', 'Scope x'))
     org = company('Scoped s.r.o.', owner, accountant, employee)

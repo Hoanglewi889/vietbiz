@@ -43,8 +43,13 @@ def build_router(current_user):
                 'AND NOT EXISTS (SELECT 1 FROM cashbook_entries c WHERE c.document_id=d.id '
                 'AND c.organization_id=d.organization_id AND c.voided_at IS NULL) GROUP BY d.organization_id',
                 tuple(ids)).fetchall()
-            activity = db.execute(f'SELECT organization_id, MAX(created_at) AS at FROM audit_events '
-                                  f'WHERE organization_id IN ({marks}) GROUP BY organization_id', tuple(ids)).fetchall()
+            # Task work (creation, status changes, replies) is activity too; it is not in audit_events.
+            activity = db.execute(
+                'SELECT organization_id, MAX(at) AS at FROM ('
+                f'SELECT organization_id, created_at AS at FROM audit_events WHERE organization_id IN ({marks}) '
+                f'UNION ALL SELECT organization_id, created_at FROM task_events WHERE organization_id IN ({marks}) '
+                f'UNION ALL SELECT organization_id, created_at FROM task_comments WHERE organization_id IN ({marks})'
+                ') a GROUP BY organization_id', (*ids, *ids, *ids)).fetchall()
         by_doc = defaultdict(dict)
         for row in docs:
             by_doc[row['organization_id']][row['status']] = row['n']

@@ -60,6 +60,8 @@ const path = require("node:path");
     await page.locator("#demo").click();
     await waitText("#notice", "Dữ liệu mẫu sẵn sàng");
     // Accountant portfolio (CR-6): every client company, urgent first, one click to open.
+    // Let the demo finish loading (three tasks, first one open) before switching views.
+    await page.waitForFunction(() => document.querySelectorAll(".task-item").length === 3);
     await page.locator("#portfolio-tab:not([hidden])").waitFor();
     await page.locator("#portfolio-tab").click();
     await page.locator(".portfolio-row").first().waitFor();
@@ -69,11 +71,17 @@ const path = require("node:path");
       firstClient.includes("Potraviny Vltava") && firstClient.includes("Chờ duyệt") && firstClient.includes("Quá hạn"),
     );
     await page.locator(".portfolio-row").first().getByRole("button", { name: "Mở công ty" }).click();
-    await page.waitForFunction(() => document.querySelector("#portfolio-view").hidden);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#portfolio-view").hidden &&
+        document.querySelector("#org").value !== "" &&
+        // The demo company has documents to review, so the client opens on its documents.
+        !document.querySelector("#docs-view").hidden,
+    );
     check(
       "Opening a client switches to its workspace",
       (await page.locator("#org").inputValue()) !== "" &&
-        ((await page.locator("#docs-view").isVisible()) || (await page.locator("#tasks-view").isVisible())),
+        (await page.locator("#docs-view").isVisible()),
     );
     await page.locator("#tasks-tab").click();
     await page.waitForFunction(() => document.querySelectorAll(".task-item").length === 3);
@@ -447,6 +455,8 @@ const path = require("node:path");
     await page.locator("#cash-submit").click();
     await page.waitForFunction(() => document.querySelector("#c-amount").value === "");
     await page.unroute(/\/cashbook$/);
+    // The list reloads after the form clears; wait for it before counting rows.
+    await waitText("#cash-list", "Synthetic retry");
     check(
       "A retried payment after a lost response is booked once",
       (await page.locator(".cash-entry").filter({ hasText: "Synthetic retry" }).count()) === 1,
@@ -750,6 +760,12 @@ const path = require("node:path");
     check(
       "Deselecting company clears financial summary",
       (await page.locator("#metric-active").innerText()) === "—",
+    );
+    // Codex review, PR #11: a reset context must not keep another identity's client list.
+    check(
+      "Resetting the context clears and hides the portfolio",
+      (await page.locator("#portfolio-tab").isHidden()) &&
+        (await page.locator(".portfolio-row").count()) === 0,
     );
     check("No browser JavaScript errors", errors.length === 0);
     const report = {

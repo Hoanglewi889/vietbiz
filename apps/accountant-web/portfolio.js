@@ -61,4 +61,12 @@ function renderPortfolio() {
   }
   if (!portfolio.items.length) empty(list, t("noPortfolio"));
 }
+// Called from resetContext(): a new identity or company must never see the old portfolio.
+function resetPortfolio() {
+  portfolio.ticket++;
+  portfolio.items = [];
+  $("portfolio-tab").hidden = true;
+  if (!$("portfolio-view").hidden) setTab("tasks");
+  $("portfolio-list").replaceChildren();
+}
 $("portfolio-tab").onclick = () => setTab("portfolio");

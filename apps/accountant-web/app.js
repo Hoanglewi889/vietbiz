@@ -184,6 +184,7 @@ function resetContext() {
   $("cash-tab").hidden = true;
   if (!$("cash-view").hidden) setTab("tasks");
   if (invoicesReady()) resetInvoices();
+  if (typeof resetPortfolio === "function") resetPortfolio();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
