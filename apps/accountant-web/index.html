@@ -9,6 +9,7 @@
     <script src="app.js" defer></script>
     <script src="invoices.js" defer></script>
     <script src="legal.js" defer></script>
+    <script src="portfolio.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -94,7 +95,8 @@
         </div>
       </section>
       <div class="workspace-tabs">
-        <button id="tasks-tab" class="tab active" data-i18n="tasks"></button
+        <button id="portfolio-tab" class="tab" hidden data-i18n="portfolioTab"></button
+        ><button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
         ><button id="legal-tab" class="tab" data-i18n="legalTab"></button
@@ -387,6 +389,15 @@
           </div>
         </form>
         <div id="invoice-list" class="invoice-list"></div>
+      </section>
+      <section id="portfolio-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="portfolioTab"></h2>
+            <p class="muted" data-i18n="portfolioHint"></p>
+          </div>
+        </div>
+        <div id="portfolio-list" class="portfolio-list" aria-live="polite"></div>
       </section>
       <section id="legal-view" class="panel" hidden>
         <div class="section-heading">

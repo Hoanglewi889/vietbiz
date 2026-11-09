@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -59,6 +59,25 @@ const path = require("node:path");
     );
     await page.locator("#demo").click();
     await waitText("#notice", "Dữ liệu mẫu sẵn sàng");
+    // Accountant portfolio (CR-6): every client company, urgent first, one click to open.
+    await page.locator("#portfolio-tab:not([hidden])").waitFor();
+    await page.locator("#portfolio-tab").click();
+    await page.locator(".portfolio-row").first().waitFor();
+    const firstClient = await page.locator(".portfolio-row").first().innerText();
+    check(
+      "Accountant sees the client portfolio with work counts",
+      firstClient.includes("Potraviny Vltava") && firstClient.includes("Chờ duyệt") && firstClient.includes("Quá hạn"),
+    );
+    await page.locator(".portfolio-row").first().getByRole("button", { name: "Mở công ty" }).click();
+    await page.waitForFunction(() => document.querySelector("#portfolio-view").hidden);
+    check(
+      "Opening a client switches to its workspace",
+      (await page.locator("#org").inputValue()) !== "" &&
+        ((await page.locator("#docs-view").isVisible()) || (await page.locator("#tasks-view").isVisible())),
+    );
+    await page.locator("#tasks-tab").click();
+    await page.waitForFunction(() => document.querySelectorAll(".task-item").length === 3);
+    await chooseFirst();
     check(
       "Sample workflow creates three tasks",
       (await page.locator(".task-item").count()) === 3,

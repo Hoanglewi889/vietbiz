@@ -206,3 +206,17 @@ Czech invoice and an ISDOC 6.0.2 export. Only CZK for now.
   not been validated against the official XSD here (the schema host is not reachable).
 - Not yet: corrective documents (§ 42–45), EUR invoices, reverse charge / exempt lines,
   payment matching with the cashbook, QR payment code, e-mail delivery.
+
+## CR-6 · Accountant portfolio
+
+- Requested by: Claude, 2026-11-09 · Implemented in: `claude/accountant-portfolio`
+- Status: proposed in PR · Depends on: CR-4 (cashbook links)
+
+`GET /v1/portfolio` (any signed-in user) → `200 {items, as_of_date, timezone}` with one item per
+company where the user is **accountant or owner** (employee memberships are left out):
+`organization_id`, `name`, `role`, `documents_to_review`, `documents_returned`,
+`approved_without_payment` (approved documents with invoice data and no active cashbook entry),
+`open_tasks`, `overdue_tasks` (due before today in Europe/Prague), `waiting_on_client`,
+`last_activity_at`, `attention` (`high` if any overdue task, `medium` if documents wait for
+review or changes, else `low`). Sorted by attention, then documents to review, then name.
+Counts only; no document data leaves its company. No schema change.

@@ -252,6 +252,7 @@ async function refresh() {
     loadSummary(),
     loadCash(),
     invoicesReady() ? loadInvoices() : null,
+    typeof loadPortfolio === "function" ? loadPortfolio() : null,
   ]);
   if (state.task) await selectTask(state.task.id);
 }
@@ -1205,6 +1206,7 @@ function translate() {
   renderCashOptions();
   if (invoicesReady()) translateInvoices();
   if (typeof renderLegal === "function") renderLegal();
+  if (typeof renderPortfolio === "function") renderPortfolio();
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1226,7 +1228,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["tasks", "docs", "cash", "invoices", "legal"]) {
+  for (const name of ["portfolio", "tasks", "docs", "cash", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
