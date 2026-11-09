@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
 
+from .archive import learn_category
 from .database import connection
 from .tax_document_rules import TaxDocument, VatLine, check_tax_document
 
@@ -85,6 +86,8 @@ def _insert(db, org_id, doc_id, uid, version, source, fields: 'FieldsIn', check)
                 json.dumps(fields.model_dump(mode='json'), ensure_ascii=False, sort_keys=True),
                 json.dumps(check, ensure_ascii=False, sort_keys=True), uid,
                 datetime.now(timezone.utc).isoformat()))
+    # After a scan or edit: same supplier as before -> same category (company's own history only).
+    learn_category(db, org_id, uid, doc_id, fields.model_dump(mode='json'))
 
 
 def record_isdoc(db, org_id, uid, doc_id, raw_fields):

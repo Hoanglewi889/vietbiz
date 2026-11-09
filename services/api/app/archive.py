@@ -6,8 +6,11 @@ Filtering runs in Python over the company's documents and their latest invoice-d
 revision, which is fine at prototype scale (one company, thousands of documents).
 """
 import json
+from collections import defaultdict
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -22,6 +25,43 @@ STATUSES = ('needs_review', 'needs_changes', 'approved', 'rejected')
 class CategoryIn(BaseModel):
     model_config = ConfigDict(extra='forbid')
     category: Category | None
+
+
+def supplier_key(fields):
+    """One supplier = one DIČ; without a DIČ, the name before the first comma."""
+    vat = (fields.get('supplier_vat_id') or '').replace(' ', '').upper()
+    if vat:
+        return 'vat:' + vat
+    name = (fields.get('supplier_name') or '').split(',')[0].strip().casefold()
+    return 'name:' + name if name else None
+
+
+def learn_category(db, org_id, uid, doc_id, fields):
+    """After a scan, reuse the category this company last gave the same supplier.
+
+    Applies only to an uncategorised document and only from the company's own history;
+    nothing is guessed. Audited as document.auto_categorized.
+    """
+    key = supplier_key(fields)
+    if not key:
+        return None
+    current = db.execute('SELECT category FROM documents WHERE id=? AND organization_id=?',
+                         (doc_id, org_id)).fetchone()
+    if current is None or current['category'] is not None:
+        return None
+    history = db.execute(
+        'SELECT d.category, e.fields FROM documents d JOIN document_extractions e '
+        'ON e.document_id=d.id AND e.organization_id=d.organization_id '
+        'WHERE d.organization_id=? AND d.id<>? AND d.category IS NOT NULL '
+        'ORDER BY e.created_at DESC', (org_id, doc_id)).fetchall()
+    category = next((row['category'] for row in history if supplier_key(json.loads(row['fields'])) == key), None)
+    if category is None:
+        return None
+    db.execute('UPDATE documents SET category=? WHERE id=? AND organization_id=? AND category IS NULL',
+               (category, doc_id, org_id))
+    db.execute('INSERT INTO audit_events VALUES(?,?,?,?,?,?)',
+               (str(uuid4()), org_id, uid, 'document.auto_categorized', doc_id, datetime.now(timezone.utc).isoformat()))
+    return category
 
 
 def _invoice(row):
@@ -120,6 +160,61 @@ def build_router(current_user, authorize, audit):
             item['possible_duplicates'] = [d for d in seen.get(key, []) if d != item['id']] if key else []
         chosen = [i for i in items if _matches(i, q, month, category, status)]
         return {'items': chosen, 'summary': _summary(chosen), 'categories': list(CATEGORIES)}
+
+    @router.get('/suppliers')
+    def suppliers(org_id: str, uid: str = Depends(current_user),
+                  year: int | None = Query(default=None, ge=2000, le=2100)):
+        """Spending per supplier and per category, from the latest invoice data of each document."""
+        with connection() as db:
+            authorize(db, uid, org_id, ('owner', 'accountant'))
+            rows = db.execute(
+                'SELECT d.id, d.category, d.created_at, e.fields FROM documents d JOIN document_extractions e '
+                'ON e.document_id=d.id AND e.organization_id=d.organization_id '
+                'JOIN (SELECT document_id, MAX(version) AS version FROM document_extractions '
+                'WHERE organization_id=? GROUP BY document_id) m ON m.document_id=e.document_id AND m.version=e.version '
+                'WHERE d.organization_id=?', (org_id, org_id)).fetchall()
+        groups, by_category, uncategorised = {}, defaultdict(lambda: defaultdict(Decimal)), 0
+        for row in rows:
+            fields = json.loads(row['fields'])
+            key, total = supplier_key(fields), fields.get('total')
+            if not key or not total:
+                continue
+            day = fields.get('issue_date') or row['created_at'][:10]
+            if year and not day.startswith(str(year)):
+                continue
+            currency = fields.get('currency') or 'CZK'
+            amount = Decimal(total)
+            tax = sum((Decimal(line['tax']) for line in fields.get('lines', []) if line.get('tax')), Decimal('0'))
+            g = groups.setdefault(key, {'key': key, 'name': (fields.get('supplier_name') or '').split(',')[0].strip(),
+                                        'vat_id': fields.get('supplier_vat_id'), 'documents': 0, 'last_date': day,
+                                        'totals': defaultdict(lambda: {'total': Decimal('0'), 'tax': Decimal('0')}),
+                                        'categories': defaultdict(int), 'months': defaultdict(Decimal)})
+            g['documents'] += 1
+            g['last_date'] = max(g['last_date'], day)
+            g['totals'][currency]['total'] += amount
+            g['totals'][currency]['tax'] += tax
+            if currency == 'CZK':
+                g['months'][day[:7]] += amount
+            if row['category']:
+                g['categories'][row['category']] += 1
+            else:
+                uncategorised += 1
+            by_category[currency][row['category'] or 'none'] += amount
+        money = lambda v: str(v.quantize(Decimal('0.01')))  # noqa: E731
+        items = []
+        for g in groups.values():
+            items.append({
+                'key': g['key'], 'name': g['name'], 'vat_id': g['vat_id'], 'documents': g['documents'],
+                'last_date': g['last_date'],
+                'totals': {c: {'total': money(t['total']), 'tax': money(t['tax'])} for c, t in sorted(g['totals'].items())},
+                'category': max(g['categories'], key=g['categories'].get) if g['categories'] else None,
+                'months': {m: money(v) for m, v in sorted(g['months'].items())},
+            })
+        items.sort(key=lambda i: (-Decimal(i['totals'].get('CZK', {}).get('total', '0')), i['name'].casefold()))
+        return {'items': items, 'uncategorised_documents': uncategorised,
+                'by_category': {c: {k: money(v) for k, v in sorted(cats.items(), key=lambda kv: -kv[1])}
+                                for c, cats in sorted(by_category.items())},
+                'categories': list(CATEGORIES)}
 
     @router.put('/documents/{doc_id}/category')
     def set_category(org_id: str, doc_id: str, body: CategoryIn, uid: str = Depends(current_user)):

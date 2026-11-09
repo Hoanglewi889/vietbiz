@@ -1153,6 +1153,55 @@ main {
   color: var(--danger);
   font-weight: 650;
 }
+.supplier-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 18px 28px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.supplier-panel[hidden] {
+  display: none;
+}
+.supplier-col h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.supplier-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.supplier-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  font-size: 13px;
+}
+.supplier-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.supplier-row strong:last-of-type {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.supplier-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 4px;
+  background: #eef3e4;
+  overflow: hidden;
+}
+.supplier-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--green);
+}
+.supplier-bar.muted span {
+  background: #c9a227;
+}
 footer {
   display: flex;
   justify-content: space-between;
@@ -1375,6 +1424,9 @@ label.check {
 @media (max-width: 760px) {
   .invoice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .supplier-panel {
+    grid-template-columns: 1fr;
   }
   .invoice-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
