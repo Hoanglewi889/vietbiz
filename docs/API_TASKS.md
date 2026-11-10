@@ -50,10 +50,13 @@ before pagination, including cursor validation. Comments do not change task stat
 or version. All accountants currently authorized for a company see its internal notes.
 
 Lists return `{items, next_cursor}` ordered by creation time descending, then ID
-descending. `limit` defaults to 25 and is bounded 1–100. Cursor is an existing record
-ID within the exact current company/task/visibility/filter scope, otherwise 422.
-Changing filter means starting a new page sequence. List pagination is not a frozen
-snapshot; refresh after other users change filters/statuses.
+descending. `limit` defaults to 25 and is bounded 1–100. A cursor must be an existing
+record ID within the caller's access scope (company for tasks; company, task and
+visibility for comments), otherwise 422. For task lists the cursor is not checked
+against the `status`/`overdue` filter: a task that left the filter after the previous
+page (another user's transition, or midnight in Prague for `overdue`) still marks the
+position, and the next page continues after it. Changing filter means starting a new
+page sequence. List pagination is not a frozen snapshot; refresh to see changes.
 
 Update uses a conditional SQL UPDATE on company + ID + expected version. A stale
 version or invalid transition returns 409; the UI reloads instead of resending the

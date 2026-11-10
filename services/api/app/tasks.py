@@ -94,11 +94,14 @@ def record_event(db, row, actor, previous, reason):
                 row['status'], row['version'], reason, row['updated_at']))
 
 
-def page(db, table, where, params, cursor, limit, columns='*'):
-    # table/where/columns are fixed internal constants, never request SQL.
+def page(db, table, where, params, cursor, limit, columns='*', scope=None):
+    # table/where/columns/scope are fixed internal constants, never request SQL.
+    # The cursor is looked up in the caller's access scope, not under the list filter: a task
+    # that left a status (or overdue) filter after the previous page still marks the position.
+    scope_where, scope_params = scope or (where, params)
     if cursor:
-        anchor = db.execute(f'SELECT created_at,id FROM {table} WHERE {where} AND id=?',
-                            (*params, cursor)).fetchone()
+        anchor = db.execute(f'SELECT created_at,id FROM {table} WHERE {scope_where} AND id=?',
+                            (*scope_params, cursor)).fetchone()
         if not anchor:
             raise HTTPException(422, 'Invalid cursor for this scope or filter')
         where += ' AND (created_at<? OR (created_at=? AND id<?))'
@@ -159,7 +162,8 @@ def build_router(current_user, authorize):
             if overdue:
                 where += " AND due_date<? AND status NOT IN ('DONE','CANCELLED')"
                 params += (today_prague(),)
-            rows, next_cursor = page(db, 'accounting_tasks', where, params, cursor, limit)
+            rows, next_cursor = page(db, 'accounting_tasks', where, params, cursor, limit,
+                                     scope=('organization_id=?', (org_id,)))
             return {'items': [public_task(row, role) for row in rows], 'next_cursor': next_cursor}
 
     @router.get('/summary')
