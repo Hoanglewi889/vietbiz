@@ -381,3 +381,28 @@ Counts only; no document data leaves its company. No schema change.
 - `GET …/cash-flow?weeks=1..26` → per week cash from the cashbook; for a week with an imported
   statement, bank and card money from the statement (card payments and terminal payouts pass
   through the account; `card.included_in_statement`), otherwise card and bank from the cashbook.
+
+## CR-13 · Statement register: files, periods, balances, coverage, card payouts
+
+- Requested by: the owner ("quản lý giấy tờ của tiền thẻ ngân hàng, statement cho từng doanh
+  nghiệp"), 2026-11-10 · Implemented in: `claude/statement-register`
+- Status: proposed in PR · Depends on: CR-11
+
+- Migration `0012_statement_register`: `bank_imports` gains `account`, `period_from`,
+  `period_to`, `opening_balance`, `closing_balance`, `statement_no`; new `bank_import_files`
+  keeps each original statement (≤ 2 MB, as received) per company; `bank_transactions.purpose`
+  (`card_payout`, `bank_fee`, `own_transfer`, `tax_or_insurance`, `salary`, `other`) only on
+  ignored movements (CHECK; table constraint on PostgreSQL, column CHECK on SQLite).
+- GPC: account, period (day after the old-balance date → statement date), balances and number
+  from the 074 header (layout per Fio's GPC description); CSV: Fio-style metadata lines
+  (`accountId`, `bankId`, `openingBalance`, `closingBalance`, `dateStart`, `dateEnd`). Missing or
+  contradictory values fall back to the movements' dates. The import response includes them.
+- `GET …/bank/imports` → files per account with `breaks` (`gap` with missing dates; `balance`
+  when a closing balance does not equal the next opening). `GET …/bank/imports/{id}/file` →
+  the original bytes (`nosniff`, safe filename). `GET …/bank/coverage?months=1..36` → per
+  account and month `covered` / `partial` / `missing` (counted up to today).
+- `POST …/transactions/{id}/ignore` takes `purpose`; match and unmatch clear it.
+  `GET …/bank/card-payouts?month=` → card sales (cashbook) vs payouts marked `card_payout`,
+  difference and share (fees plus month-edge timing — an estimate).
+- `GET /v1/portfolio` adds `statements_through` and `statement_missing_month` (last calendar
+  month not fully covered, for companies that have imported statements).

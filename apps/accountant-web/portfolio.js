@@ -72,6 +72,11 @@ function renderPortfolio() {
     if (item.vat_threshold && item.vat_threshold !== "ok")
       stats.append(text("span", t("vatThresholdShort") + ": " + COPY[lang].vatThresholdStatus[item.vat_threshold],
         "portfolio-stat" + (item.vat_threshold === "watch" ? "" : " alert")));
+    if (item.statement_missing_month)
+      stats.append(text("span", fill(t("statementMissing"), { month: item.statement_missing_month.slice(5) + "/" + item.statement_missing_month.slice(0, 4) }),
+        "portfolio-stat alert"));
+    else if (item.statements_through)
+      stats.append(text("span", fill(t("statementsThrough"), { date: shortDate(item.statements_through) }), "portfolio-stat"));
     if (item.profile_missing)
       stats.append(button(t("profileMissing"), () => openProfile(item.organization_id), "portfolio-stat alert"));
     const open = button(t("openCompany"), async () => {

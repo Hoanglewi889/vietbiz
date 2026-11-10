@@ -18,12 +18,13 @@ import io
 import json
 import unicodedata
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .database import connection
@@ -186,6 +187,85 @@ def parse_csv(raw: bytes):
     return rows
 
 
+def _signed_hal(digits, sign):
+    try:
+        value = Decimal(int(digits)) / 100
+    except ValueError:
+        return None
+    return (-value if sign == '-' else value).quantize(CENT)
+
+
+def gpc_meta(raw: bytes):
+    """Account, period, balances and number from the 074 header(s) (Fio's GPC description:
+    account 4–19, old-balance date 40–45, old balance 46–59 + sign 60, new balance 61–74 + sign
+    75, statement number 106–108, statement date 109–114). A file with several statements keeps
+    the first opening balance and the last closing one."""
+    headers = [line.ljust(128) for line in raw.decode('cp1250', errors='replace').splitlines() if line.startswith('074')]
+    if not headers:
+        return {}
+    first, last = headers[0], headers[-1]
+    previous = _gpc_date(first[39:45])
+    try:
+        number = int(last[105:108])
+    except ValueError:
+        number = None
+    return {'account': _digits(first[3:19]),
+            'period_from': (date.fromisoformat(previous) + timedelta(days=1)).isoformat() if previous else None,
+            'period_to': _gpc_date(last[108:114]),
+            'opening_balance': _signed_hal(first[45:59], first[59]),
+            'closing_balance': _signed_hal(last[60:74], last[74]), 'statement_no': number}
+
+
+CSV_META = {'accountid': 'account', 'cislo uctu': 'account', 'openingbalance': 'opening_balance',
+            'pocatecni zustatek': 'opening_balance', 'closingbalance': 'closing_balance',
+            'konecny zustatek': 'closing_balance', 'datestart': 'period_from', 'obdobi od': 'period_from',
+            'dateend': 'period_to', 'obdobi do': 'period_to', 'idfrom': None, 'bankid': 'bank_code'}
+
+
+def csv_meta(raw: bytes):
+    """Key/value lines above a bank CSV's table (Fio writes accountId, openingBalance, dateStart …)."""
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        text = raw.decode('cp1250', errors='replace')
+    delimiter = ';' if text[:4096].count(';') >= text[:4096].count(',') else ','
+    meta = {}
+    for row in list(csv.reader(io.StringIO(text), delimiter=delimiter))[:15]:
+        if len(row) < 2:
+            continue
+        key = CSV_META.get(_fold(row[0]))
+        if not key:
+            continue
+        value = row[1].strip()
+        if key in ('opening_balance', 'closing_balance'):
+            meta[key] = _csv_amount(value)
+        elif key in ('period_from', 'period_to'):
+            meta[key] = _csv_date(value)
+        else:
+            meta[key] = value or None
+    if meta.get('account') and meta.get('bank_code') and '/' not in meta['account']:
+        meta['account'] = f"{meta['account']}/{meta['bank_code']}"
+    meta.pop('bank_code', None)
+    return meta
+
+
+def statement_meta(fmt, raw, rows):
+    meta = gpc_meta(raw) if fmt == 'gpc' else csv_meta(raw)
+    days = sorted(r['booked_on'] for r in rows)
+    meta.setdefault('period_from', None)
+    meta.setdefault('period_to', None)
+    meta['period_to'] = meta['period_to'] or (days[-1] if days else None)
+    if meta['period_from'] and meta['period_to'] and meta['period_from'] > meta['period_to']:
+        meta['period_from'] = None  # a header that contradicts itself is not used for the period
+    meta['period_from'] = meta['period_from'] or (min(days[0], meta['period_to']) if days and meta['period_to']
+                                                  else days[0] if days else meta['period_to'])
+    if not meta.get('account'):
+        accounts = {r['account'] for r in rows if r['account']}
+        meta['account'] = accounts.pop() if len(accounts) == 1 else None
+    return {key: meta.get(key) for key in ('account', 'period_from', 'period_to', 'opening_balance',
+                                           'closing_balance', 'statement_no')}
+
+
 def parse_statement(filename: str, raw: bytes):
     if raw.lstrip()[:3] == b'074':
         return 'gpc', parse_gpc(raw)
@@ -280,7 +360,7 @@ def duplicate_flags(rows):
 
 
 COLUMNS_OUT = ('id,account,bank_ref,booked_on,amount,currency,vs,ks,ss,counter_account,counter_name,message,'
-               'status,issued_invoice_id,document_id,matched_by,note,version,updated_at')
+               'status,issued_invoice_id,document_id,matched_by,note,purpose,version,updated_at')
 
 
 class Decision(BaseModel):
@@ -289,6 +369,13 @@ class Decision(BaseModel):
     issued_invoice_id: str | None = Field(default=None, max_length=64)
     document_id: str | None = Field(default=None, max_length=64)
     note: str | None = Field(default=None, max_length=300)
+
+
+Purpose = Literal['card_payout', 'bank_fee', 'own_transfer', 'tax_or_insurance', 'salary', 'other']
+
+
+class IgnoreIn(Decision):
+    purpose: Purpose = 'other'
 
 
 class MatchIn(Decision):
@@ -325,9 +412,18 @@ def build_router(current_user, authorize, audit):
             if db.execute('SELECT 1 FROM bank_imports WHERE organization_id=? AND sha256=?', (org_id, digest)).fetchone():
                 raise HTTPException(409, {'code': 'statement_already_imported'})
             import_id = str(uuid4())
-            db.execute('INSERT INTO bank_imports(id,organization_id,filename,format,sha256,rows,imported_by,imported_at) '
-                       'VALUES(?,?,?,?,?,?,?,?)',
-                       (import_id, org_id, (file.filename or 'statement')[:200], fmt, digest, len(rows), uid, now))
+            meta = statement_meta(fmt, raw, rows)
+            db.execute('INSERT INTO bank_imports(id,organization_id,filename,format,sha256,rows,imported_by,imported_at,'
+                       'account,period_from,period_to,opening_balance,closing_balance,statement_no) '
+                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                       (import_id, org_id, (file.filename or 'statement')[:200], fmt, digest, len(rows), uid, now,
+                        meta['account'], meta['period_from'], meta['period_to'],
+                        None if meta['opening_balance'] is None else str(meta['opening_balance']),
+                        None if meta['closing_balance'] is None else str(meta['closing_balance']),
+                        meta['statement_no']))
+            # CR-13: the original file stays with the company, as received.
+            db.execute('INSERT INTO bank_import_files(import_id,organization_id,media_type,content) VALUES(?,?,?,?)',
+                       (import_id, org_id, 'text/csv' if fmt == 'csv' else 'text/plain', raw))
             added = 0
             for row in rows:
                 inserted = db.execute(
@@ -342,7 +438,8 @@ def build_router(current_user, authorize, audit):
             matched = auto_match(db, org_id, uid, now)
             audit(db, org_id, uid, 'bank.statement_imported', None)
             return {'import_id': import_id, 'format': fmt, 'rows': len(rows), 'added': added,
-                    'already_known': len(rows) - added, 'auto_matched': matched}
+                    'already_known': len(rows) - added, 'auto_matched': matched,
+                    **{k: (str(v) if isinstance(v, Decimal) else v) for k, v in meta.items()}}
 
     @router.get('/transactions')
     def transactions(org_id: str, status: str | None = Query(None, pattern='^(unmatched|matched|ignored)$'),
@@ -438,20 +535,21 @@ def build_router(current_user, authorize, audit):
                 if fields and currency != tx['currency']:
                     raise HTTPException(422, f'The document is in {currency}; this movement is in {tx["currency"]}')
             row = decide(db, org_id, tx_id, body.expected_version,
-                         "status='matched', issued_invoice_id=?, document_id=?, matched_by='manual', note=?",
+                         "status='matched', issued_invoice_id=?, document_id=?, matched_by='manual', note=?, "
+                         'purpose=NULL',
                          (body.issued_invoice_id, body.document_id, body.note), uid, now)
             audit(db, org_id, uid, 'bank.matched', body.document_id)
             return row
 
     @router.post('/transactions/{tx_id}/ignore')
-    def ignore(org_id: str, tx_id: str, body: Decision, uid: str = Depends(current_user)):
+    def ignore(org_id: str, tx_id: str, body: IgnoreIn, uid: str = Depends(current_user)):
         now = datetime.now(timezone.utc).isoformat()
         with connection() as db:
             authorize(db, uid, org_id, roles)
             load(db, org_id, tx_id)
             row = decide(db, org_id, tx_id, body.expected_version,
-                         "status='ignored', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=?",
-                         (body.note,), uid, now)
+                         "status='ignored', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=?, "
+                         'purpose=?', (body.note, body.purpose), uid, now)
             audit(db, org_id, uid, 'bank.ignored', None)
             return row
 
@@ -462,12 +560,139 @@ def build_router(current_user, authorize, audit):
             authorize(db, uid, org_id, roles)
             load(db, org_id, tx_id)
             row = decide(db, org_id, tx_id, body.expected_version,
-                         "status='unmatched', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=NULL",
+                         "status='unmatched', issued_invoice_id=NULL, document_id=NULL, matched_by=NULL, note=NULL, "
+                         'purpose=NULL',
                          (), uid, now)
             audit(db, org_id, uid, 'bank.unmatched', None)
             return row
 
+    @router.get('/imports')
+    def imports(org_id: str, uid: str = Depends(current_user)):
+        """CR-13: every statement file of the company, per account, with breaks in the chain."""
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            rows = [dict(r) for r in db.execute(
+                'SELECT id,filename,format,rows,imported_by,imported_at,account,period_from,period_to,'
+                'opening_balance,closing_balance,statement_no FROM bank_imports WHERE organization_id=? '
+                'ORDER BY account, period_to, imported_at', (org_id,))]
+        return {'items': rows, 'breaks': chain_breaks(rows)}
+
+    @router.get('/imports/{import_id}/file')
+    def import_file(org_id: str, import_id: str, uid: str = Depends(current_user)):
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            row = db.execute('SELECT f.media_type, f.content, i.filename FROM bank_import_files f JOIN bank_imports i '
+                             'ON i.id=f.import_id WHERE f.import_id=? AND f.organization_id=?',
+                             (import_id, org_id)).fetchone()
+        if row is None:
+            raise HTTPException(404, 'Statement not found')
+        safe = ''.join(ch for ch in row['filename'] if ch.isalnum() or ch in '._-') or 'statement'
+        return Response(bytes(row['content']), media_type=row['media_type'],
+                        headers={'Content-Disposition': f'attachment; filename="{safe}"',
+                                 'X-Content-Type-Options': 'nosniff'})
+
+    @router.get('/coverage')
+    def coverage(org_id: str, months: int = Query(12, ge=1, le=36), uid: str = Depends(current_user)):
+        """Per account and month: covered by statements, partly, or not at all."""
+        today = date.fromisoformat(today_prague())
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            rows = [dict(r) for r in db.execute('SELECT account, period_from, period_to FROM bank_imports '
+                                                'WHERE organization_id=? AND period_from IS NOT NULL', (org_id,))]
+        return {'as_of_date': today.isoformat(), 'accounts': month_coverage(rows, today, months)}
+
+    @router.get('/card-payouts')
+    def card_payouts(org_id: str, month: str = Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$'),
+                     uid: str = Depends(current_user)):
+        """Card sales in the cashbook against what the terminal provider paid into the account.
+
+        Payouts arrive a few days after the sale and net of fees, so the month's difference is an
+        estimate of fees plus timing at the month's edges, not an exact reconciliation.
+        """
+        first = month + '-01'
+        last = (date.fromisoformat(first).replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            sales = sum((Decimal(r['amount']) for r in db.execute(
+                "SELECT amount FROM cashbook_entries WHERE organization_id=? AND kind='income' AND method='card' "
+                "AND currency='CZK' AND voided_at IS NULL AND entry_date >= ? AND entry_date <= ?",
+                (org_id, first, last.isoformat()))), Decimal('0'))
+            payouts = [dict(r) for r in db.execute(
+                "SELECT id, booked_on, amount, counter_name FROM bank_transactions WHERE organization_id=? "
+                "AND purpose='card_payout' AND currency='CZK' AND booked_on >= ? AND booked_on <= ? ORDER BY booked_on",
+                (org_id, first, last.isoformat()))]
+        paid = sum((Decimal(p['amount']) for p in payouts), Decimal('0'))
+        return {'month': month, 'card_sales': str(sales.quantize(CENT)), 'payouts': str(paid.quantize(CENT)),
+                'difference': str((sales - paid).quantize(CENT)),
+                'difference_share': str(((sales - paid) / sales).quantize(Decimal('0.0001'))) if sales else None,
+                'items': payouts}
+
     return router
+
+
+def chain_breaks(imports):
+    """Per account, statements whose periods leave a gap or whose balances do not follow on."""
+    out = []
+    by_account = defaultdict(list)
+    for item in imports:
+        if item['period_from'] and item['period_to']:
+            by_account[item['account']].append(item)
+    for account, items in by_account.items():
+        items.sort(key=lambda i: (i['period_from'], i['period_to']))
+        for before, after in zip(items, items[1:]):
+            gap_from = date.fromisoformat(before['period_to']) + timedelta(days=1)
+            if date.fromisoformat(after['period_from']) > gap_from:
+                out.append({'account': account, 'kind': 'gap', 'after': before['id'], 'before': after['id'],
+                            'missing_from': gap_from.isoformat(),
+                            'missing_to': (date.fromisoformat(after['period_from']) - timedelta(days=1)).isoformat()})
+            elif (before['closing_balance'] is not None and after['opening_balance'] is not None
+                  and Decimal(before['closing_balance']) != Decimal(after['opening_balance'])
+                  and after['period_from'] == gap_from.isoformat()):
+                out.append({'account': account, 'kind': 'balance', 'after': before['id'], 'before': after['id'],
+                            'closing': before['closing_balance'], 'opening': after['opening_balance']})
+    return out
+
+
+def month_coverage(imports, today, months):
+    """For each account: the last `months` calendar months, each 'covered', 'partial' or 'missing'.
+    A month counts up to today, so the running month is covered once statements reach today."""
+    first_month = date(today.year, today.month, 1)
+    starts = []
+    for _ in range(months):
+        starts.append(first_month)
+        first_month = (first_month - timedelta(days=1)).replace(day=1)
+    out = []
+    by_account = defaultdict(list)
+    for item in imports:
+        by_account[item['account']].append((date.fromisoformat(item['period_from']),
+                                            date.fromisoformat(item['period_to'] or item['period_from'])))
+    for account, periods in sorted(by_account.items(), key=lambda kv: kv[0] or ''):
+        earliest = min(p[0] for p in periods)
+        rows = []
+        for start in sorted(starts):
+            end = min((start + timedelta(days=32)).replace(day=1) - timedelta(days=1), today)
+            if end < earliest.replace(day=1):
+                continue  # before the first statement: not this account's history yet
+            days = {start + timedelta(days=n) for n in range((end - start).days + 1)}
+            covered = {d for d in days if any(a <= d <= b for a, b in periods)}
+            state = 'covered' if covered == days else 'partial' if covered else 'missing'
+            rows.append({'month': start.isoformat()[:7], 'state': state,
+                         'missing_days': len(days) - len(covered)})
+        out.append({'account': account, 'months': rows, 'through': max(p[1] for p in periods).isoformat()})
+    return out
+
+
+def statements_status(db, org_id, today):
+    """For the portfolio: last day covered by a statement, and whether last month is incomplete."""
+    rows = [dict(r) for r in db.execute('SELECT account, period_from, period_to FROM bank_imports '
+                                        'WHERE organization_id=? AND period_from IS NOT NULL', (org_id,))]
+    if not rows:
+        return {'statements_through': None, 'statement_missing_month': None}
+    cover = month_coverage(rows, today, 2)
+    previous = (date(today.year, today.month, 1) - timedelta(days=1)).isoformat()[:7]
+    missing = any(m['month'] == previous and m['state'] != 'covered' for a in cover for m in a['months'])
+    return {'statements_through': max(a['through'] for a in cover),
+            'statement_missing_month': previous if missing else None}
 
 
 def overdue(db, org_id, today=None):

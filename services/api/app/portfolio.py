@@ -15,6 +15,7 @@ from .database import connection
 from .filing_calendar import _profile, deadlines, window
 from .tasks import today_prague
 from .vat_threshold import estimate, is_vat_payer
+from .bank import statements_status
 
 FINANCE_ROLES = ('accountant', 'owner')
 CLOSED = ('DONE', 'CANCELLED')
@@ -96,6 +97,7 @@ def build_router(current_user):
                 tuple(ids)).fetchall()
             year = int(today[:4])
             thresholds = {org: estimate(db, org, year)['status'] for org in ids if is_vat_payer(db, org) is False}
+            statements = {org: statements_status(db, org, date.fromisoformat(today)) for org in ids}
         start, end = window(30)
         by_doc = defaultdict(dict)
         for row in docs:
@@ -121,6 +123,7 @@ def build_router(current_user):
                 'last_activity_at': last.get(org),
                 'profile_missing': profiles[org] is None,
                 'vat_threshold': thresholds.get(org),
+                **statements[org],
                 **replies.get(org, {'unanswered_messages': 0, 'oldest_unanswered_at': None,
                                     'median_reply_minutes': None}),
             }
