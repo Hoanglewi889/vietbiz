@@ -125,3 +125,15 @@ def test_a_header_whose_period_runs_backwards_falls_back_to_the_movements():
     owner, _, _, org = payer_company()
     body = send(org, owner, statement(header('301126', 0, 0, 3, '091126'), gpc_075(100, '2', ref='1', day='051126'))).json()
     assert (body['period_from'], body['period_to']) == ('2026-11-05', '2026-11-09')
+
+
+def test_a_czech_or_vietnamese_file_name_downloads_with_an_encoded_header():
+    """Codex review, PR #19: a non-Latin-1 name must not turn the download into HTTP 500."""
+    owner, _, _, org = payer_company()
+    content = statement(header('300926', 0, 0, 1, '311026'))
+    imported = send(org, owner, content, name='výpis-říjen sao kê.gpc').json()
+    r = c.get(url(org, f"/bank/imports/{imported['import_id']}/file"), headers=h(owner))
+    assert r.status_code == 200 and r.content == content
+    assert r.headers['content-disposition'] == (
+        'attachment; filename="vypis-rijensaoke.gpc"; '
+        "filename*=UTF-8''v%C3%BDpis-%C5%99%C3%ADjen%20sao%20k%C3%AA.gpc")

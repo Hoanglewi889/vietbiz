@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Literal
+from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
@@ -586,10 +587,13 @@ def build_router(current_user, authorize, audit):
                              (import_id, org_id)).fetchone()
         if row is None:
             raise HTTPException(404, 'Statement not found')
-        safe = ''.join(ch for ch in row['filename'] if ch.isalnum() or ch in '._-') or 'statement'
+        # Codex review, PR #19: header values are Latin-1, so a Czech or Vietnamese name goes in an
+        # RFC 5987 `filename*` and the plain `filename` gets an ASCII fallback.
+        plain = unicodedata.normalize('NFKD', row['filename']).encode('ascii', 'ignore').decode()
+        safe = ''.join(ch for ch in plain if ch.isalnum() or ch in '._-') or 'statement'
+        disposition = f"attachment; filename=\"{safe}\"; filename*=UTF-8''{quote(row['filename'], safe='')}"
         return Response(bytes(row['content']), media_type=row['media_type'],
-                        headers={'Content-Disposition': f'attachment; filename="{safe}"',
-                                 'X-Content-Type-Options': 'nosniff'})
+                        headers={'Content-Disposition': disposition, 'X-Content-Type-Options': 'nosniff'})
 
     @router.get('/coverage')
     def coverage(org_id: str, months: int = Query(12, ge=1, le=36), uid: str = Depends(current_user)):
