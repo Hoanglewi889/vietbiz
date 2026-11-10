@@ -228,3 +228,20 @@ def test_event_failure_rolls_back_transition(team, monkeypatch):
         move(team, task, 'IN_PROGRESS')
     stored = c.get(team['url'] + '/' + task['id'], headers=h(team['owner'])).json()
     assert stored['version'] == 1 and stored['status'] == 'OPEN'
+
+
+def test_cursor_survives_its_anchor_leaving_a_status_filter(team):
+    """Claude review of Sprint 10: a filtered page must not break when another user moves the
+    last task of the previous page out of the filter before the next page is read."""
+    oldest, middle, newest = (create(team, title=f'Synthetic {n}') for n in ('A', 'B', 'C'))
+    first = c.get(team['url'], params={'status': 'OPEN', 'limit': 2}, headers=h(team['owner'])).json()
+    assert [t['id'] for t in first['items']] == [newest['id'], middle['id']]
+    assert move(team, middle, 'IN_PROGRESS').status_code == 200  # the cursor's anchor leaves OPEN
+    second = c.get(team['url'], params={'status': 'OPEN', 'limit': 2, 'cursor': first['next_cursor']},
+                   headers=h(team['owner']))
+    assert second.status_code == 200, second.text
+    assert [t['id'] for t in second.json()['items']] == [oldest['id']]
+    # A cursor from another company's scope is still refused.
+    other = f"/v1/organizations/{team['other']}/tasks"
+    assert c.get(other, params={'status': 'OPEN', 'cursor': first['next_cursor']},
+                 headers=h(team['outsider'])).status_code == 422
