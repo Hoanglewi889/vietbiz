@@ -127,6 +127,8 @@ function invoiceLine(line = {}) {
     remove,
   );
   row.querySelector('[data-key="description"]').parentElement.classList.add("grow");
+  // #018: quantity stepper under the line (qty-stepper.js); the quantity field stays as it is.
+  if (typeof attachQtyStepper === "function") attachQtyStepper(row);
   return row;
 }
 function renderInvoiceLines(lines) {

@@ -1,0 +1,235 @@
+/* Lucian UX/UI Prompt #011 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#011 */
+/* Quick create: a fixed "+" at the bottom centre of the workspace. The 320 × 300 stage of the
+   original is kept; it sits so the button rests 16px above the bottom edge, and only its
+   buttons take pointer events, so the page under the empty stage stays usable.
+   --dy is 0 here: the original drops the button 60px when it opens to centre the fan in its
+   demo frame, which would push it off the bottom of the screen. */
+.u011 {
+  --dy: 0px;
+  position: fixed;
+  left: 50%;
+  bottom: -100px;
+  margin-left: -160px;
+  width: 320px;
+  height: 300px;
+  z-index: 40;
+  pointer-events: none;
+}
+.u011-halo {
+  position: absolute;
+  left: 160px;
+  top: 150px;
+  width: 330px;
+  height: 330px;
+  margin: -165px 0 0 -165px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--ux-accent) 20%, transparent),
+    color-mix(in srgb, var(--ux-accent) 6%, transparent) 70%,
+    transparent
+  );
+  transform: scale(0.2);
+  opacity: 0;
+  transition:
+    transform 0.6s var(--ux-ease),
+    opacity 0.4s var(--ux-ease),
+    translate 0.6s var(--ux-spring);
+}
+.u011.is-open .u011-halo {
+  transform: none;
+  opacity: 1;
+  translate: 0 var(--dy);
+}
+.u011-fab {
+  position: absolute;
+  left: 126px;
+  top: 116px;
+  width: 68px;
+  height: 68px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(145deg, #8b6cff, #5b6cff);
+  z-index: 2;
+  pointer-events: auto;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
+    0 20px 36px -16px rgba(91, 72, 255, 0.8);
+  transition:
+    transform 0.5s var(--ux-spring),
+    background 0.4s,
+    translate 0.6s var(--ux-spring);
+}
+.u011.is-open .u011-fab {
+  translate: 0 var(--dy);
+}
+.u011-fab:hover {
+  transform: scale(1.06);
+}
+.u011-fab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(123, 97, 255, 0.45);
+  animation: u011-breathe 2.6s var(--ux-ease) infinite;
+}
+.u011.is-open .u011-fab::after {
+  animation: none;
+}
+@keyframes u011-breathe {
+  0% {
+    box-shadow: 0 0 0 0 rgba(123, 97, 255, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 18px rgba(123, 97, 255, 0);
+  }
+}
+.u011-fab:active {
+  transform: scale(0.9);
+}
+.u011-fab:focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 5px;
+}
+.u011-fab svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: transform 0.6s var(--ux-spring);
+}
+.u011.is-open .u011-fab svg {
+  transform: rotate(135deg);
+}
+.u011-it {
+  position: absolute;
+  left: 133px;
+  top: 123px;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  z-index: 1;
+  transform: translate(0, 0) scale(0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.5s var(--ux-spring),
+    opacity 0.25s var(--ux-ease),
+    translate 0.6s var(--ux-spring);
+  transition-delay: calc((3 - var(--i)) * 30ms);
+}
+.u011-it i {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 14px 24px -14px rgba(0, 0, 0, 0.5);
+  transition: transform 0.4s var(--ux-spring);
+}
+.u011-it svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.u011-it span {
+  position: absolute;
+  left: 50%;
+  top: 60px;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  font-weight: 680;
+  color: var(--ux-ink-2);
+  white-space: nowrap;
+}
+.u011-it:hover i {
+  transform: scale(1.1);
+}
+.u011-it:active i {
+  transform: scale(0.92);
+}
+.u011-it:focus-visible {
+  outline: none;
+}
+.u011-it:focus-visible i {
+  box-shadow:
+    0 0 0 3px var(--ux-page),
+    0 0 0 5px var(--ux-accent);
+}
+.u011.is-open .u011-it {
+  translate: 0 var(--dy);
+  transform: translate(var(--x), var(--y)) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: calc(var(--i) * 45ms);
+}
+.u011-it.is-picked i {
+  animation: u011-pick 0.5s var(--ux-ease);
+}
+@keyframes u011-pick {
+  50% {
+    transform: scale(1.25);
+  }
+}
+.u011-note {
+  margin: 0;
+  position: absolute;
+  left: 50%;
+  top: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ux-ink);
+  color: var(--ux-page);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  transform: translate(-50%, 14px) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s var(--ux-ease),
+    transform 0.5s var(--ux-spring);
+}
+.u011-note i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ux-mint);
+}
+.u011-note.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* Room at the end of the workspace so the button never covers its last row. */
+.u011-spacer {
+  height: 104px;
+}
+@media print {
+  .u011,
+  .u011-spacer {
+    display: none !important;
+  }
+}

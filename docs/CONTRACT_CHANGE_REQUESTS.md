@@ -406,3 +406,22 @@ Counts only; no document data leaves its company. No schema change.
   difference and share (fees plus month-edge timing — an estimate).
 - `GET /v1/portfolio` adds `statements_through` and `statement_missing_month` (last calendar
   month not fully covered, for companies that have imported statements).
+
+## CR-14 · UI elements: quick create, review ribbon, quantity stepper, archive date range
+
+- Requested by: the owner (lucianLabs UI prompts #011, #012, #018, #030), 2026-11-10 ·
+  Implemented in: `claude/ui-elements`
+- Status: proposed in PR · Depends on: CR-13 (stacked branch)
+
+- Migration `0013_document_flags`: `document_flags` (one row per marked document; unmarking
+  deletes the row, the audit log keeps `document.flagged` / `document.unflagged`).
+- `GET|PUT …/documents/{id}/flag` (owner, accountant) → `{flagged, flagged_count}`; PUT takes
+  `{flagged: bool}` and is idempotent (same state again changes and logs nothing; flag changes
+  are serialised per company).
+- `GET …/archive` adds `date_from`, `date_to` (ISO dates, by issue date, upload day when no
+  data; `date_from > date_to` → 422), `flagged=true|false`, each item's `flagged`, and a
+  top-level `flagged_count`.
+- Web: `ux-theme.css` maps the `--ux-*` tokens to VietBiz's variables (dark values apply only
+  with `<html data-theme="dark">`, the app has no dark theme yet); `quick-create.*` (#011),
+  `doc-flag.*` (#012), `qty-stepper.*` (#018), `range-calendar.*` (#030). Each keeps the
+  original's MIT licence line.
