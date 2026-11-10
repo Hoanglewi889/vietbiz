@@ -635,7 +635,11 @@ def build_router(current_user, authorize, audit):
 
 
 def chain_breaks(imports):
-    """Per account, statements whose periods leave a gap or whose balances do not follow on."""
+    """Per account, gaps between statements and balances that do not follow on.
+
+    Codex review, PR #19: the comparison runs against the furthest day covered so far, not just
+    the previous statement, so a daily statement inside a monthly one creates no false gap.
+    """
     out = []
     by_account = defaultdict(list)
     for item in imports:
@@ -643,17 +647,23 @@ def chain_breaks(imports):
             by_account[item['account']].append(item)
     for account, items in by_account.items():
         items.sort(key=lambda i: (i['period_from'], i['period_to']))
-        for before, after in zip(items, items[1:]):
-            gap_from = date.fromisoformat(before['period_to']) + timedelta(days=1)
-            if date.fromisoformat(after['period_from']) > gap_from:
-                out.append({'account': account, 'kind': 'gap', 'after': before['id'], 'before': after['id'],
-                            'missing_from': gap_from.isoformat(),
-                            'missing_to': (date.fromisoformat(after['period_from']) - timedelta(days=1)).isoformat()})
-            elif (before['closing_balance'] is not None and after['opening_balance'] is not None
-                  and Decimal(before['closing_balance']) != Decimal(after['opening_balance'])
-                  and after['period_from'] == gap_from.isoformat()):
-                out.append({'account': account, 'kind': 'balance', 'after': before['id'], 'before': after['id'],
-                            'closing': before['closing_balance'], 'opening': after['opening_balance']})
+        reach, reached_by = None, None
+        for item in items:
+            start, end = date.fromisoformat(item['period_from']), date.fromisoformat(item['period_to'])
+            if reach is not None:
+                follows = reach + timedelta(days=1)
+                if start > follows:
+                    out.append({'account': account, 'kind': 'gap', 'after': reached_by['id'], 'before': item['id'],
+                                'missing_from': follows.isoformat(),
+                                'missing_to': (start - timedelta(days=1)).isoformat()})
+                elif (start == follows and reached_by['closing_balance'] is not None
+                      and item['opening_balance'] is not None
+                      and Decimal(reached_by['closing_balance']) != Decimal(item['opening_balance'])):
+                    out.append({'account': account, 'kind': 'balance', 'after': reached_by['id'],
+                                'before': item['id'], 'closing': reached_by['closing_balance'],
+                                'opening': item['opening_balance']})
+            if reach is None or end > reach:
+                reach, reached_by = end, item
     return out
 
 

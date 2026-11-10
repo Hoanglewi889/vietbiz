@@ -137,3 +137,12 @@ def test_a_czech_or_vietnamese_file_name_downloads_with_an_encoded_header():
     assert r.headers['content-disposition'] == (
         'attachment; filename="vypis-rijensaoke.gpc"; '
         "filename*=UTF-8''v%C3%BDpis-%C5%99%C3%ADjen%20sao%20k%C3%AA.gpc")
+
+
+def test_a_daily_statement_inside_a_monthly_one_is_not_a_gap():
+    """Codex review, PR #19: compare with the furthest covered day, not the previous row."""
+    owner, _, _, org = payer_company()
+    send(org, owner, statement(header('300926', 0, 100, 10, '311026')))   # 1–31 Oct
+    send(org, owner, statement(header('091026', 50, 60, 1, '101026')))    # 10 Oct only
+    send(org, owner, statement(header('311026', 100, 200, 11, '301126')))  # 1–30 Nov, follows the monthly one
+    assert c.get(url(org, '/bank/imports'), headers=h(owner)).json()['breaks'] == []
