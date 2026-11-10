@@ -8,8 +8,9 @@ cashbook shows up as "changed since the close" instead of silently moving the di
 
 Leakage signals for a month: days with cash sales but no close, the sum of shortages and
 surpluses, and cash or card expenses above a threshold without a document. Weekly cash flow
-takes cash and card from the cashbook; bank money comes from imported statements for weeks
-that have them (CR-11), otherwise from the cashbook's bank entries, never both.
+takes cash from the cashbook; for weeks with an imported statement (CR-11) the statement
+supplies bank and card money (card payments and terminal payouts pass through the account),
+otherwise card and bank come from the cashbook — never both.
 """
 from __future__ import annotations
 
@@ -100,6 +101,22 @@ def build_router(current_user, authorize, audit):
             return _close(db.execute(f'SELECT {CLOSE_COLUMNS} FROM cash_closes WHERE organization_id=? AND close_date=?',
                                      (org_id, day)).fetchone())
 
+    @router.get('/cash-closes/{close_date}')
+    def read_close(org_id: str, close_date: date, uid: str = Depends(current_user)):
+        """One day's close with what the cashbook expects now (Codex review, PR #17: the form
+        must not depend on which month the cashbook view shows)."""
+        day = close_date.isoformat()
+        with connection() as db:
+            authorize(db, uid, org_id, roles)
+            close = db.execute(f'SELECT {CLOSE_COLUMNS} FROM cash_closes WHERE organization_id=? AND close_date=?',
+                               (org_id, day)).fetchone()
+            previous = db.execute('SELECT close_date, counted_cash FROM cash_closes WHERE organization_id=? '
+                                  'AND close_date < ? ORDER BY close_date DESC LIMIT 1', (org_id, day)).fetchone()
+            moves = cash_movements(db, org_id, day, day)[day]
+        return {'date': day, 'close': _close(close), 'cash_income': _money(moves['income']),
+                'cash_expense': _money(moves['expense']),
+                'suggested_opening_float': previous['counted_cash'] if previous else None}
+
     @router.get('/cash-control')
     def cash_control(org_id: str, month: str = Query(pattern=MONTH), uid: str = Depends(current_user)):
         first = month + '-01'
@@ -175,12 +192,20 @@ def build_router(current_user, authorize, audit):
             w['stmt_in' if amount > 0 else 'stmt_out'] += abs(amount)
         out = []
         for week, w in rows.items():
-            bank_in, bank_out = (w['stmt_in'], w['stmt_out']) if w['stmt'] else (w['book_bank_in'], w['book_bank_out'])
-            money_in = w['cash_in'] + w['card_in'] + bank_in
-            money_out = w['cash_out'] + w['card_out'] + bank_out
+            if w['stmt']:
+                # Codex review, PR #17: card payments and terminal payouts go through the account,
+                # so a statement already holds them; the cashbook's card lines are not added again.
+                money_in = w['cash_in'] + w['stmt_in']
+                money_out = w['cash_out'] + w['stmt_out']
+                bank_in, bank_out = w['stmt_in'], w['stmt_out']
+            else:
+                bank_in, bank_out = w['book_bank_in'], w['book_bank_out']
+                money_in = w['cash_in'] + w['card_in'] + bank_in
+                money_out = w['cash_out'] + w['card_out'] + bank_out
             out.append({'week_start': week, 'bank_source': 'statement' if w['stmt'] else 'cashbook',
                         'cash': {'in': _money(w['cash_in']), 'out': _money(w['cash_out'])},
-                        'card': {'in': _money(w['card_in']), 'out': _money(w['card_out'])},
+                        'card': {'in': _money(w['card_in']), 'out': _money(w['card_out']),
+                                 'included_in_statement': w['stmt']},
                         'bank': {'in': _money(bank_in), 'out': _money(bank_out)},
                         'in': _money(money_in), 'out': _money(money_out), 'net': _money(money_in - money_out)})
         return {'weeks': out, 'currency': 'CZK'}

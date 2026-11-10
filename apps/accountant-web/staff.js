@@ -129,7 +129,7 @@ async function addPerson() {
 }
 async function addShift() {
   if (!$("shift-staff").value) throw { messageKey: "chooseStaffFirst" };
-  await request(base() + "/shifts", json("POST", {
+  const body = {
     staff_id: $("shift-staff").value,
     work_date: $("shift-date").value,
     start_time: $("shift-start").value,
@@ -137,7 +137,12 @@ async function addShift() {
     break_minutes: Number($("shift-break").value || 0),
     tips: $("shift-tips").value.trim() ? decimal($("shift-tips").value) : "0",
     note: null,
-  }, crypto.randomUUID()));
+  };
+  // Codex review, PR #17: the same key until it succeeds, so a retry after a lost response
+  // returns the first shift instead of recording a second one.
+  const scope = "shift:" + state.org;
+  await request(base() + "/shifts", json("POST", body, retryKey(scope, body)));
+  retries.delete(scope);
   $("staff-week").value = $("shift-date").value;
   $("shift-tips").value = "";
   notice(t("saved"));

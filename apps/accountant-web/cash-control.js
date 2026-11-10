@@ -1,6 +1,6 @@
 "use strict";
 // Daily cash close, leakage signals and weekly cash flow (CR-12), inside the cashbook tab.
-const cashControl = { data: null, flow: null, ticket: 0, closes: {} };
+const cashControl = { data: null, flow: null, ticket: 0, closes: {}, day: null, dayTicket: 0 };
 
 async function loadCashControl() {
   if (!state.org || !FINANCE_ROLES.includes(state.role)) return resetCashControl();
@@ -16,16 +16,27 @@ async function loadCashControl() {
   cashControl.closes = Object.fromEntries(data.days.filter((d) => d.close).map((d) => [d.date, d.close]));
   $("cash-control").hidden = false;
   if (!$("close-date").value) $("close-date").value = pragueToday();
-  fillCloseForm();
   renderCashControl();
+  await fillCloseForm();
 }
-function fillCloseForm() {
-  const close = cashControl.closes[$("close-date").value];
-  $("close-opening").value = close ? close.opening_float : cashControl.data?.suggested_opening_float || "";
+// Codex review, PR #17: the form reads the chosen day from the server, whatever month the
+// cashbook shows, so an existing close is always recounted with its own version.
+async function fillCloseForm() {
+  const day = $("close-date").value,
+    ticket = ++cashControl.dayTicket;
+  cashControl.day = null;
+  $("close-save").disabled = true;
+  if (!day || !state.org) return;
+  const info = await request(base() + "/cash-closes/" + day);
+  if (ticket !== cashControl.dayTicket || $("close-date").value !== day) return;
+  cashControl.day = info;
+  const close = info.close;
+  $("close-opening").value = close ? close.opening_float : info.suggested_opening_float || "";
   $("close-counted").value = close ? close.counted_cash : "";
   $("close-note").value = close?.note || "";
   $("close-result").textContent = close ? closeResult(close) : "";
   $("close-save").textContent = t(close ? "recountTill" : "closeTill");
+  $("close-save").disabled = false;
 }
 function closeResult(close) {
   const diff = Number(close.difference);
@@ -51,11 +62,11 @@ function renderCashControl() {
   missing.replaceChildren();
   $("leak-missing-hint").hidden = !data.totals.days_without_close.length;
   for (const day of data.totals.days_without_close)
-    missing.append(button(czDate(day), () => {
+    missing.append(button(czDate(day), () => run(async () => {
       $("close-date").value = day;
-      fillCloseForm();
+      await fillCloseForm();
       $("close-counted").focus();
-    }, "secondary"));
+    }), "secondary"));
   const undoc = $("leak-undocumented");
   undoc.replaceChildren();
   for (const e of data.undocumented_expenses)
@@ -99,8 +110,10 @@ function renderCashFlow() {
 }
 async function saveClose() {
   const day = $("close-date").value,
-    existing = cashControl.closes[day];
+    loaded = cashControl.day;
   if (!day || !$("close-counted").value.trim()) throw { messageKey: "closeNeedsCount" };
+  if (!loaded || loaded.date !== day) throw { messageKey: "closeConflict" };
+  const existing = loaded.close;
   let saved;
   try {
     saved = await request(base() + "/cash-closes/" + day, json("PUT", {
@@ -111,29 +124,30 @@ async function saveClose() {
     }));
   } catch (error) {
     if (error.status === 409) {
-      await loadCashControl();
+      await fillCloseForm();
       throw { messageKey: "closeConflict" };
     }
     throw error;
   }
   notice(closeResult(saved));
   await loadCashControl();
-  $("close-date").value = day;
-  fillCloseForm();
 }
 function resetCashControl() {
   cashControl.ticket++;
   cashControl.data = null;
   cashControl.flow = null;
   cashControl.closes = {};
+  cashControl.day = null;
+  cashControl.dayTicket++;
   $("cash-control").hidden = true;
   $("close-form").reset();
   $("close-result").textContent = "";
   for (const id of ["leak-summary", "leak-missing", "leak-undocumented", "cash-flow"]) $(id).replaceChildren();
   document.querySelectorAll(".leak-warning").forEach((n) => n.remove());
 }
-$("close-date").onchange = fillCloseForm;
+$("close-date").onchange = () => run(fillCloseForm);
 $("close-form").onsubmit = (e) => {
   e.preventDefault();
-  run(saveClose, $("close-save"));
+  // run() re-enables the button afterwards; the form decides again once the day is reloaded.
+  if (!$("close-save").disabled) run(saveClose);
 };

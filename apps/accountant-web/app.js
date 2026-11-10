@@ -1237,7 +1237,7 @@ function translate() {
   if (typeof renderStaff === "function" && staffState.period) renderStaff();
   if (typeof renderCashControl === "function" && cashControl.data) {
     renderCashControl();
-    fillCloseForm();
+    if (cashControl.day) $("close-save").textContent = t(cashControl.day.close ? "recountTill" : "closeTill");
   }
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);

@@ -143,6 +143,22 @@ def test_weekly_cash_flow_takes_bank_money_from_statements_when_a_week_has_them(
     weeks = c.get(url(org, '/cash-flow'), headers=h(owner), params={'weeks': 2}).json()['weeks']
     assert [w['week_start'] for w in weeks] == ['2026-10-26', '2026-11-02']
     assert (weeks[0]['bank_source'], weeks[0]['in'], weeks[0]['net']) == ('cashbook', '1500.00', '1500.00')
-    # The statement replaces the cashbook's bank entries for that week: 900 in, 200 out, plus 300 by card.
+    # The statement replaces the cashbook's bank and card lines for that week (Codex review, PR #17:
+    # the 300 card purchase is already one of the statement's debits): 900 in, 200 out.
     assert (weeks[1]['bank_source'], weeks[1]['in'], weeks[1]['out'], weeks[1]['net']) == (
-        'statement', '900.00', '500.00', '400.00')
+        'statement', '900.00', '200.00', '700.00')
+    assert weeks[1]['card'] == {'in': '0.00', 'out': '300.00', 'included_in_statement': True}
+
+
+def test_a_day_close_is_read_on_its_own_whatever_month_is_shown(monkeypatch):
+    """Codex review, PR #17: the close form must find an existing close outside the shown month."""
+    monkeypatch.setattr(cash_control, 'today_prague', lambda: '2026-11-03')
+    owner, _, _, org = company()
+    entry(org, owner, kind='income', method='cash', category='sales', amount='700', entry_date='2026-10-31')
+    c.put(url(org, '/cash-closes/2026-10-30'), headers=h(owner), json={'opening_float': '1000', 'counted_cash': '1500'})
+    c.put(url(org, '/cash-closes/2026-10-31'), headers=h(owner), json={'opening_float': '1500', 'counted_cash': '2200'})
+    day = c.get(url(org, '/cash-closes/2026-10-31'), headers=h(owner)).json()
+    assert (day['close']['version'], day['close']['difference'], day['cash_income']) == (1, '0.00', '700.00')
+    assert day['suggested_opening_float'] == '1500.00'  # the close before this day
+    fresh = c.get(url(org, '/cash-closes/2026-11-02'), headers=h(owner)).json()
+    assert fresh['close'] is None and fresh['suggested_opening_float'] == '2200.00'

@@ -759,6 +759,34 @@ const path = require("node:path");
     await page.locator("#shift-tips").fill("250");
     await page.locator("#shift-add").click();
     await waitText("#shift-summary", "Synthetic Lan");
+    // Codex review, PR #17: a shift whose response is lost is not recorded twice on retry.
+    await page.locator("#shift-staff").selectOption({ label: "Synthetic Lan" });
+    await page.locator("#shift-date").fill(await page.evaluate(() => pragueToday().slice(0, 8) + "01"));
+    let dropShiftResponse = true;
+    await page.route(/\/shifts$/, async (route) => {
+      if (route.request().method() === "POST" && dropShiftResponse) {
+        dropShiftResponse = false;
+        await route.fetch();
+        await route.abort();
+      } else await route.continue();
+    });
+    await page.locator("#shift-add").click();
+    await page.waitForTimeout(300);
+    await page.locator("#shift-add").click();
+    await page.unroute(/\/shifts$/);
+    await page.locator("#staff-week").fill(await page.evaluate(() => pragueToday().slice(0, 8) + "01"));
+    await page.locator("#staff-week").dispatchEvent("change");
+    await page.waitForFunction(() =>
+      document.querySelector("#shift-period").textContent.includes(czDate(weekBounds(pragueToday().slice(0, 8) + "01")[0])) &&
+      document.querySelector("#shift-list").textContent.includes("Synthetic Lan"));
+    check(
+      "A shift retried after a lost response is recorded once",
+      (await page.locator(".shift-item").filter({ hasText: "Synthetic Lan" }).count()) === 1,
+    );
+    await page.locator("#staff-week").fill(await page.evaluate(() => pragueToday()));
+    await page.locator("#staff-week").dispatchEvent("change");
+    await waitText("#shift-summary", "Synthetic Lan");
+    await page.locator("#shift-date").fill(await page.evaluate(() => pragueToday()));
     await page.locator("#shift-staff").selectOption({ label: "Synthetic Minh" });
     await page.locator("#shift-start").fill("09:00");
     await page.locator("#shift-end").fill("14:00");
@@ -780,6 +808,16 @@ const path = require("node:path");
     await page.locator("#close-counted").fill("1900");
     await page.locator("#close-save").click();
     await page.waitForFunction(() => /đếm được 1\s900,00/.test(document.querySelector("#close-result").textContent));
+    // Codex review, PR #17: an existing close is found even when the cashbook shows another month.
+    await page.locator("#cash-month").fill("2025-01");
+    await page.locator("#cash-month").dispatchEvent("change");
+    await page.waitForFunction(() => document.querySelector("#cash-report").textContent.includes("2025-01"));
+    await page.locator("#close-date").fill(await page.evaluate(() => pragueToday()));
+    await page.locator("#close-date").dispatchEvent("change");
+    await page.waitForFunction(() => document.querySelector("#close-save").textContent === "Đếm lại" && !document.querySelector("#close-save").disabled);
+    check("An existing close outside the shown month opens as a recount", (await page.locator("#close-counted").inputValue()) === "1900.00");
+    await page.locator("#cash-month").fill(await page.evaluate(() => pragueToday().slice(0, 7)));
+    await page.locator("#cash-month").dispatchEvent("change");
     check(
       "The daily cash close compares the counted till with the cashbook",
       /^(Thiếu|Thừa|Khớp)/.test(await page.locator("#close-result").innerText()) &&

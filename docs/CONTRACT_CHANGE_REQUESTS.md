@@ -376,5 +376,8 @@ Counts only; no document data leaves its company. No schema change.
   `changed_since_close`; totals of shortages and surpluses, `days_without_close` (cash sales,
   no count, before today); cash/card expenses ≥ 500 Kč without a document; suggested opening
   float from the last close.
-- `GET …/cash-flow?weeks=1..26` → per week cash and card from the cashbook, bank from imported
-  statements when the week has any, otherwise from the cashbook's bank entries (never both).
+- `GET …/cash-closes/{date}` → that day's close (or null), its cash income/expense and the
+  suggested opening float from the previous close, independent of the month shown.
+- `GET …/cash-flow?weeks=1..26` → per week cash from the cashbook; for a week with an imported
+  statement, bank and card money from the statement (card payments and terminal payouts pass
+  through the account; `card.included_in_statement`), otherwise card and bank from the cashbook.
