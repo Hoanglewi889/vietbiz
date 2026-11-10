@@ -1,0 +1,95 @@
+/* Lucian UX/UI Prompt #011 #012 #018 #030 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/ */
+/* Shared base for the lucianLabs elements (.u011, .u012, .u018, .u030).
+   Everything is scoped to the .ux class: no rule here reaches the rest of the page.
+   Light: the --ux-* tokens point at VietBiz's own theme variables (styles.css :root).
+   Dark: VietBiz has no dark theme yet, so the elements follow the page, not the OS;
+   their dark values apply once the page sets <html data-theme="dark">. */
+.ux {
+  --ux-page: var(--paper);
+  --ux-surface: var(--white);
+  --ux-surface-2: color-mix(in srgb, var(--paper) 70%, var(--line));
+  --ux-surface-3: var(--line);
+  --ux-ink: var(--ink);
+  --ux-ink-2: var(--muted);
+  --ux-ink-3: color-mix(in srgb, var(--muted) 72%, var(--white));
+  --ux-line: color-mix(in srgb, var(--ink) 9%, transparent);
+  --ux-line-2: color-mix(in srgb, var(--ink) 17%, transparent);
+  --ux-accent: var(--green);
+  --ux-accent-2: #2f8fe0;
+  --ux-accent-soft: color-mix(in srgb, var(--green) 12%, transparent);
+  --ux-accent-ink: var(--white);
+  --ux-mint: var(--green);
+  --ux-warn: #d6731e;
+  --ux-danger: var(--danger);
+  --ux-glass: rgba(255, 255, 255, 0.58);
+  --ux-glass-line: rgba(255, 255, 255, 0.85);
+  --ux-shadow: color-mix(in srgb, var(--ink) 14%, transparent);
+  --ux-shadow-strong: color-mix(in srgb, var(--ink) 30%, transparent);
+  --ux-grad: linear-gradient(120deg, #7b61ff, #3d8bff 55%, #1fb89a);
+  --ux-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ux-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+:root[data-theme="dark"] .ux {
+  color-scheme: dark;
+  --ux-page: #07080d;
+  --ux-surface: #13141c;
+  --ux-surface-2: #1a1b25;
+  --ux-surface-3: #252632;
+  --ux-ink: #f4f0e8;
+  --ux-ink-2: rgba(244, 240, 232, 0.68);
+  --ux-ink-3: rgba(244, 240, 232, 0.42);
+  --ux-line: rgba(255, 255, 255, 0.08);
+  --ux-line-2: rgba(255, 255, 255, 0.16);
+  --ux-accent: #b7a4ff;
+  --ux-accent-2: #7db4ff;
+  --ux-accent-soft: rgba(183, 164, 255, 0.15);
+  --ux-accent-ink: #0b0c12;
+  --ux-mint: #7ee8c0;
+  --ux-warn: #ffb26b;
+  --ux-danger: #ff7d8c;
+  --ux-glass: rgba(255, 255, 255, 0.07);
+  --ux-glass-line: rgba(255, 255, 255, 0.18);
+  --ux-shadow: rgba(0, 0, 0, 0.45);
+  --ux-shadow-strong: rgba(0, 0, 0, 0.72);
+  --ux-grad: linear-gradient(120deg, #b7a4ff, #7db4ff 55%, #a5f2d3);
+}
+.ux,
+.ux *,
+.ux *::before,
+.ux *::after {
+  box-sizing: border-box;
+}
+.ux {
+  /* VietBiz's own type, so the elements read as part of the page */
+  font-family: inherit;
+  color: var(--ux-ink);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+}
+:where(.ux) :is(button, input, textarea, select) {
+  font: inherit;
+  color: inherit;
+}
+:where(.ux) button {
+  cursor: pointer;
+}
+.ux :focus-visible {
+  outline: 2px solid var(--ux-accent);
+  outline-offset: 3px;
+}
+.ux [hidden] {
+  display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ux,
+  .ux *,
+  .ux *::before,
+  .ux *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

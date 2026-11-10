@@ -1,0 +1,221 @@
+[요소] 북마크 리본 (012, 버튼)
+[요소 설명] 누르면 리본 안으로 색이 위에서부터 흘러내리고, 아이콘이 툭 떨어졌다 튀어 오르며 작은 조각들이 흩어집니다. 저장 수와 문구가 함께 굴러 바뀝니다.
+[조작] 리본 버튼을 눌러 저장하고, 다시 눌러 해제해 보세요
+
+아래 UI 요소를 제 프로젝트에 적용해 주세요.
+
+[먼저 확인할 것]
+1. 프로젝트의 프레임워크(React, Next, Vue, Svelte, 순수 HTML 등), 스타일 방식(CSS 모듈, Tailwind, 전역 CSS), 기존 테마 방식(data-theme, dark 클래스, CSS 변수)을 찾아 확인하세요.
+2. 삽입 위치의 파일과 기존 요소를 먼저 찾고, 그 요소가 어디서 쓰이는지 보고하세요.
+
+[적용 방법]
+3. 삽입 위치에 새 컴포넌트로 추가하세요. 교체 대상이 있으면 그 요소를 아래 요소로 바꾸세요.
+4. 기존 데이터, props, 이벤트 핸들러, 폼 값, 접근성 속성(라벨, aria, 키보드 조작)은 그대로 유지하세요.
+5. 아래 코드의 구조, 형태, 모션 값(시간, 곡선, 지연)을 기준으로 옮기세요. 프레임워크에 맞게 컴포넌트와 상태로 바꾸되, 디자인을 새로 추측해 바꾸지 마세요.
+6. 색은 아래 --ux-* 토큰을 프로젝트의 기존 테마 변수에 연결하세요. 라이트와 다크 두 값을 모두 유지하고, 두 테마에서 확인하세요.
+7. 스타일은 이 요소의 클래스(.uNNN) 안에만 두고, 전역 CSS나 전역 스크립트는 바꾸지 마세요. 클래스 이름이 기존 요소와 겹치지 않게 하세요.
+8. 예시 문구와 예시 데이터는 프로젝트의 실제 데이터로 바꾸세요. 갤러리 전용 화면과 시연 코드는 가져오지 마세요. 코드 맨 위의 라이선스 주석 한 줄은 새 컴포넌트 파일 맨 위에 남겨 두세요.
+9. prefers-reduced-motion을 켠 상태에서도 기능과 최종 상태가 그대로 작동하는지 확인하세요.
+
+[완료 보고]
+10. 변경한 파일 목록, 기존 요소와 달라진 동작, 확인한 범위(두 테마, 모바일 너비, 키보드), 확인하지 못한 항목을 알려 주세요.
+
+[삽입 위치] 여기에 페이지나 컴포넌트 이름을 적으세요
+[교체 대상] 기존 요소의 파일 경로나 컴포넌트 이름을 적으세요. 없으면 "없음"
+
+--- 코드 시작 (이 코드 전체가 실제로 동작하는 원본입니다) ---
+<!-- Lucian UX/UI Prompt #012 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#012 -->
+<style>
+/* lucianLabs UI 요소 — 공통 테마 토큰 (라이트 / 다크)
+   라이트 기본값 → 시스템이 다크면 다크 → data-theme으로 명시하면 그 값을 우선합니다.
+   요소 CSS는 --ux-* 토큰만 참조하므로, 프로젝트 테마 변수에 이 값을 매핑하면 됩니다. */
+:root{
+  color-scheme:light;
+  --ux-page:#F4F2EE;
+  --ux-surface:#FFFFFF;
+  --ux-surface-2:#F5F3EF;
+  --ux-surface-3:#EAE7E1;
+  --ux-ink:#16151B;
+  --ux-ink-2:#57535F;
+  --ux-ink-3:#8E8A97;
+  --ux-line:rgba(22,21,27,.09);
+  --ux-line-2:rgba(22,21,27,.17);
+  --ux-accent:#6A57F2;
+  --ux-accent-2:#2F8FE0;
+  --ux-accent-soft:rgba(106,87,242,.12);
+  --ux-accent-ink:#FFFFFF;
+  --ux-mint:#119C72;
+  --ux-warn:#D6731E;
+  --ux-danger:#D93A55;
+  --ux-glass:rgba(255,255,255,.58);
+  --ux-glass-line:rgba(255,255,255,.85);
+  --ux-shadow:rgba(40,30,80,.14);
+  --ux-shadow-strong:rgba(40,30,80,.3);
+  --ux-grad:linear-gradient(120deg,#7B61FF,#3D8BFF 55%,#1FB89A);
+  --ux-ease:cubic-bezier(.2,.8,.2,1);
+  --ux-spring:cubic-bezier(.34,1.45,.64,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ux-page:#07080D;
+    --ux-surface:#13141C;
+    --ux-surface-2:#1A1B25;
+    --ux-surface-3:#252632;
+    --ux-ink:#F4F0E8;
+    --ux-ink-2:rgba(244,240,232,.68);
+    --ux-ink-3:rgba(244,240,232,.42);
+    --ux-line:rgba(255,255,255,.08);
+    --ux-line-2:rgba(255,255,255,.16);
+    --ux-accent:#B7A4FF;
+    --ux-accent-2:#7DB4FF;
+    --ux-accent-soft:rgba(183,164,255,.15);
+    --ux-accent-ink:#0B0C12;
+    --ux-mint:#7EE8C0;
+    --ux-warn:#FFB26B;
+    --ux-danger:#FF7D8C;
+    --ux-glass:rgba(255,255,255,.07);
+    --ux-glass-line:rgba(255,255,255,.18);
+    --ux-shadow:rgba(0,0,0,.45);
+    --ux-shadow-strong:rgba(0,0,0,.72);
+    --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ux-page:#07080D;
+  --ux-surface:#13141C;
+  --ux-surface-2:#1A1B25;
+  --ux-surface-3:#252632;
+  --ux-ink:#F4F0E8;
+  --ux-ink-2:rgba(244,240,232,.68);
+  --ux-ink-3:rgba(244,240,232,.42);
+  --ux-line:rgba(255,255,255,.08);
+  --ux-line-2:rgba(255,255,255,.16);
+  --ux-accent:#B7A4FF;
+  --ux-accent-2:#7DB4FF;
+  --ux-accent-soft:rgba(183,164,255,.15);
+  --ux-accent-ink:#0B0C12;
+  --ux-mint:#7EE8C0;
+  --ux-warn:#FFB26B;
+  --ux-danger:#FF7D8C;
+  --ux-glass:rgba(255,255,255,.07);
+  --ux-glass-line:rgba(255,255,255,.18);
+  --ux-shadow:rgba(0,0,0,.45);
+  --ux-shadow-strong:rgba(0,0,0,.72);
+  --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+}
+/* 요소 공통 베이스 — 루트에 .ux 클래스를 붙입니다 */
+.ux,.ux *,.ux *::before,.ux *::after{box-sizing:border-box}
+.ux{
+  font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+  color:var(--ux-ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em;
+  -webkit-tap-highlight-color:transparent;
+  word-break:keep-all;overflow-wrap:break-word;
+}
+/* :where()로 명시도를 0으로 둬서, 요소 클래스가 버튼·입력의 색과 글꼴을 덮어쓸 수 있게 합니다 */
+:where(.ux) :is(button,input,textarea,select){font:inherit;color:inherit}
+:where(.ux) button{cursor:pointer}
+.ux :focus-visible{outline:2px solid var(--ux-accent);outline-offset:3px}
+.ux [hidden]{display:none!important}
+/* 모션 줄이기: 전환은 즉시 끝나고, 무한 반복은 한 번으로 줄여 최종 상태가 보이게 합니다 */
+@media (prefers-reduced-motion:reduce){
+  .ux,.ux *,.ux *::before,.ux *::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;
+  }
+}
+</style>
+
+<style>
+.u012{--fill:linear-gradient(180deg,#FFC14D,#FF6B6B);position:relative;width:300px;height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.u012-btn{position:relative;width:104px;height:104px;border:0;padding:0;border-radius:32px;background:var(--ux-surface);color:var(--ux-ink);
+  box-shadow:0 0 0 1px var(--ux-line),0 24px 40px -24px var(--ux-shadow-strong);transition:transform .5s var(--ux-spring),box-shadow .5s var(--ux-ease)}
+.u012-btn:hover{transform:translateY(-3px);box-shadow:0 0 0 1px var(--ux-line-2),0 30px 48px -24px var(--ux-shadow-strong)}
+.u012-btn:active{transform:scale(.9)}
+.u012-btn:focus-visible{outline:2px solid var(--ux-accent);outline-offset:4px}
+.u012-icon{position:absolute;left:30px;top:24px;width:44px;height:56px}
+.u012-icon svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.u012-out{fill:none;stroke:currentColor;stroke-width:2.6;stroke-linejoin:round}
+.u012-in{fill:url(#u012-g);clip-path:inset(0 0 100% 0);transition:clip-path .55s cubic-bezier(.6,0,.3,1)}
+.u012.is-on .u012-in{clip-path:inset(0 0 0 0)}
+.u012.is-on .u012-out{stroke:transparent;transition:stroke .2s .4s}
+.u012.is-on .u012-icon{animation:u012-drop .7s var(--ux-ease)}
+@keyframes u012-drop{0%{transform:translateY(0)}30%{transform:translateY(7px) scaleY(.9)}60%{transform:translateY(-5px)}100%{transform:none}}
+.u012-p{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:3px;background:var(--c);opacity:0;pointer-events:none}
+.u012.is-burst .u012-p{animation:u012-burst .8s var(--ux-ease) forwards}
+@keyframes u012-burst{0%{opacity:1;transform:rotate(var(--a)) translateY(-30px) scale(.6)}100%{opacity:0;transform:rotate(var(--a)) translateY(-92px) scale(1.1) rotate(160deg)}}
+.u012-ring{position:absolute;inset:-2px;border-radius:34px;box-shadow:0 0 0 2px #FF9F5A;opacity:0;pointer-events:none}
+.u012.is-burst .u012-ring{animation:u012-ring .6s var(--ux-ease)}
+@keyframes u012-ring{from{opacity:1;transform:scale(.9)}to{opacity:0;transform:scale(1.35)}}
+.u012-meta{margin:0;display:flex;align-items:center;gap:10px;font-size:15px;font-weight:680;color:var(--ux-ink-2)}
+.u012-roll{position:relative;height:22px;overflow:hidden;transition:width .45s var(--ux-spring)}
+.u012-roll span{white-space:nowrap}
+.u012-roll span{display:block;width:max-content;line-height:22px;transition:transform .5s var(--ux-spring),opacity .3s var(--ux-ease)}
+.u012-roll span+span{position:absolute;left:0;top:0;transform:translateY(100%);opacity:0}
+.u012.is-on .u012-roll span:first-child{transform:translateY(-100%);opacity:0}
+.u012.is-on .u012-roll span+span{transform:none;opacity:1}
+.u012.is-on .u012-lab{color:var(--ux-ink)}
+.u012-dot{width:4px;height:4px;border-radius:50%;background:var(--ux-ink-3)}
+.u012-num{font-variant-numeric:tabular-nums;color:var(--ux-ink-3);font-weight:600}
+</style>
+<div class="ux u012">
+  <button class="u012-btn" type="button" aria-pressed="false" aria-label="이 글 저장">
+    <span class="u012-ring" aria-hidden="true"></span>
+    <span class="u012-icon" aria-hidden="true">
+      <svg viewBox="0 0 44 56">
+        <defs><linearGradient id="u012-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC14D"/><stop offset="1" stop-color="#FF6B6B"/></linearGradient></defs>
+        <path class="u012-in" d="M6 4h32a2 2 0 0 1 2 2v46l-18-12L4 52V6a2 2 0 0 1 2-2z"/>
+        <path class="u012-out" d="M6 4h32a2 2 0 0 1 2 2v46l-18-12L4 52V6a2 2 0 0 1 2-2z"/>
+      </svg>
+    </span>
+    <span class="u012-p" style="--a:0deg;--c:#FFC14D" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:45deg;--c:#FF6B6B" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:90deg;--c:#8B6CFF" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:135deg;--c:#22C3A6" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:180deg;--c:#FFC14D" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:225deg;--c:#FF6B6B" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:270deg;--c:#3D8BFF" aria-hidden="true"></span>
+    <span class="u012-p" style="--a:315deg;--c:#FF9F5A" aria-hidden="true"></span>
+  </button>
+  <p class="u012-meta" aria-live="polite">
+    <span class="u012-roll u012-lab"><span>나중에 읽기</span><span>저장됨</span></span>
+    <span class="u012-dot" aria-hidden="true"></span>
+    <span class="u012-num">128</span>
+  </p>
+</div>
+
+<script>
+(function () {
+  var root = document.currentScript.previousElementSibling;
+  var btn = root.querySelector('.u012-btn');
+  var num = root.querySelector('.u012-num');
+  var rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var gid = 'u012-g-' + Math.random().toString(36).slice(2, 7);
+  root.querySelector('linearGradient').id = gid;
+  root.querySelector('.u012-in').style.fill = 'url(#' + gid + ')';
+  var n = 128, t = 0;
+  var roll = root.querySelector('.u012-roll');
+  // 문구 길이가 달라도 점과 숫자가 자연스럽게 따라오도록 폭을 함께 옮깁니다
+  function fitRoll(on) { roll.style.width = roll.children[on ? 1 : 0].offsetWidth + 'px'; }
+  fitRoll(false);
+  btn.addEventListener('click', function () {
+    var on = !root.classList.contains('is-on');
+    root.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? '저장 해제' : '이 글 저장');
+    n += on ? 1 : -1;
+    num.textContent = n;
+    fitRoll(on);
+    // 저장할 때만 조각이 흩어집니다
+    root.classList.remove('is-burst');
+    clearTimeout(t);
+    if (on && !rm) {
+      void root.offsetWidth;
+      root.classList.add('is-burst');
+      t = setTimeout(function () { root.classList.remove('is-burst'); }, 900);
+    }
+  });
+})();
+</script>
+--- 코드 끝 ---

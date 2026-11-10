@@ -7,7 +7,7 @@ revision, which is fine at prototype scale (one company, thousands of documents)
 """
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Literal
 from uuid import uuid4
@@ -102,14 +102,23 @@ def _invoice(row):
     }
 
 
-def _month(item):
+def _day(item):
     invoice = item['invoice']
-    when = (invoice or {}).get('issue_date') or item['created_at']
-    return when[:7]
+    return ((invoice or {}).get('issue_date') or item['created_at'])[:10]
 
 
-def _matches(item, q, month, category, status):
+def _month(item):
+    return _day(item)[:7]
+
+
+def _matches(item, q, month, category, status, date_from=None, date_to=None, flagged=None):
     if status and item['status'] != status:
+        return False
+    if flagged is not None and item['flagged'] != flagged:
+        return False
+    if date_from and _day(item) < date_from.isoformat():
+        return False
+    if date_to and _day(item) > date_to.isoformat():
         return False
     if category == 'none' and item['category'] is not None:
         return False
@@ -145,6 +154,11 @@ def _summary(items):
     }
 
 
+class FlagIn(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    flagged: bool
+
+
 def build_router(current_user, authorize, audit):
     router = APIRouter(prefix='/v1/organizations/{org_id}', tags=['Document archive'])
 
@@ -153,7 +167,12 @@ def build_router(current_user, authorize, audit):
                 q: str | None = Query(default=None, max_length=100),
                 month: str | None = Query(default=None, pattern=r'^\d{4}-(0[1-9]|1[0-2])$'),
                 category: str | None = Query(default=None),
-                status: str | None = Query(default=None)):
+                status: str | None = Query(default=None),
+                date_from: date | None = Query(default=None),
+                date_to: date | None = Query(default=None),
+                flagged: bool | None = Query(default=None)):
+        if date_from and date_to and date_from > date_to:
+            raise HTTPException(422, 'date_from is after date_to')
         if category is not None and category != 'none' and category not in CATEGORIES:
             raise HTTPException(422, 'Unknown category')
         if status is not None and status not in STATUSES:
@@ -167,8 +186,10 @@ def build_router(current_user, authorize, audit):
                 'FROM document_extractions WHERE organization_id=? GROUP BY document_id) m '
                 'ON e.document_id=m.document_id AND e.version=m.version WHERE e.organization_id=?',
                 (org_id, org_id)).fetchall()
+            marked = {r['document_id'] for r in db.execute(
+                'SELECT document_id FROM document_flags WHERE organization_id=?', (org_id,)).fetchall()}
         invoices = {row['document_id']: _invoice(row) for row in latest}
-        items = [{**dict(d), 'invoice': invoices.get(d['id'])} for d in docs]
+        items = [{**dict(d), 'invoice': invoices.get(d['id']), 'flagged': d['id'] in marked} for d in docs]
         # The same supplier and number (or supplier, date and total) on several documents:
         # likely the same invoice twice. Rejected documents do not count.
         keys = {row['document_id']: duplicate_key(json.loads(row['fields'])) for row in latest}
@@ -180,8 +201,46 @@ def build_router(current_user, authorize, audit):
         for item in items:
             key = keys.get(item['id'])
             item['possible_duplicates'] = [d for d in seen.get(key, []) if d != item['id']] if key else []
-        chosen = [i for i in items if _matches(i, q, month, category, status)]
-        return {'items': chosen, 'summary': _summary(chosen), 'categories': list(CATEGORIES)}
+        chosen = [i for i in items if _matches(i, q, month, category, status, date_from, date_to, flagged)]
+        return {'items': chosen, 'summary': _summary(chosen), 'categories': list(CATEGORIES),
+                'flagged_count': len(marked)}
+
+    def _flag_state(db, org_id, doc_id):
+        flagged = db.execute('SELECT 1 FROM document_flags WHERE document_id=? AND organization_id=?',
+                             (doc_id, org_id)).fetchone() is not None
+        count = db.execute('SELECT COUNT(*) AS n FROM document_flags WHERE organization_id=?', (org_id,)).fetchone()['n']
+        return {'flagged': flagged, 'flagged_count': count}
+
+    def _document(db, org_id, doc_id):
+        if not db.execute('SELECT 1 FROM documents WHERE id=? AND organization_id=?', (doc_id, org_id)).fetchone():
+            raise HTTPException(404, 'Document not found')
+
+    @router.get('/documents/{doc_id}/flag')
+    def flag_state(org_id: str, doc_id: str, uid: str = Depends(current_user)):
+        """Whether this document is marked "to look at again", and how many are marked in the company."""
+        with connection() as db:
+            authorize(db, uid, org_id, ('owner', 'accountant'))
+            _document(db, org_id, doc_id)
+            return _flag_state(db, org_id, doc_id)
+
+    @router.put('/documents/{doc_id}/flag')
+    def set_flag(org_id: str, doc_id: str, body: FlagIn, uid: str = Depends(current_user)):
+        """Set the mark to the state asked for; sending the same state twice changes nothing."""
+        with connection() as db:
+            authorize(db, uid, org_id, ('owner', 'accountant'))
+            _document(db, org_id, doc_id)
+            # Serialise flag changes per company, so two clicks at once cannot both insert.
+            db.execute('UPDATE organizations SET id=id WHERE id=?', (org_id,))
+            now = _flag_state(db, org_id, doc_id)
+            if now['flagged'] != body.flagged:
+                if body.flagged:
+                    db.execute('INSERT INTO document_flags VALUES(?,?,?,?)',
+                               (doc_id, org_id, uid, datetime.now(timezone.utc).isoformat()))
+                else:
+                    db.execute('DELETE FROM document_flags WHERE document_id=? AND organization_id=?', (doc_id, org_id))
+                audit(db, org_id, uid, 'document.flagged' if body.flagged else 'document.unflagged', doc_id)
+                now = _flag_state(db, org_id, doc_id)
+            return now
 
     @router.get('/suppliers')
     def suppliers(org_id: str, uid: str = Depends(current_user),

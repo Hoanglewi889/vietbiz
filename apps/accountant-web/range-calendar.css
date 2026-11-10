@@ -1,0 +1,56 @@
+/* Lucian UX/UI Prompt #030 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#030 */
+/* Date range for the document archive. Changes from the booking original: the week starts on
+   Monday (Czech calendar) with Sunday last in red, days AFTER today are the disabled ones
+   (documents are dated in the past), and the card narrows to the screen on a phone. */
+.u030{position:relative;width:min(350px,100%);padding:18px 16px 16px;border-radius:28px;background:var(--ux-surface);box-shadow:0 0 0 1px var(--ux-line),0 36px 70px -40px var(--ux-shadow-strong)}
+.u030-pills{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.u030-pill{padding:10px 14px;border-radius:16px;background:var(--ux-surface-2);box-shadow:inset 0 0 0 1.5px transparent;transition:box-shadow .3s var(--ux-ease),background-color .3s}
+.u030-pill small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--ux-ink-3)}
+.u030-pill b{display:block;margin-top:2px;font-size:15.5px;font-weight:740;letter-spacing:-.02em;font-variant-numeric:tabular-nums;transition:color .3s}
+.u030-pill b.ph{color:var(--ux-ink-3);font-weight:600}
+.u030-pill.on{background:var(--ux-surface);box-shadow:inset 0 0 0 2px var(--ux-accent)}
+.u030-top{display:flex;align-items:center;justify-content:space-between;padding:0 4px 10px}
+.u030-m{position:relative;height:24px;overflow:hidden;flex:1}
+.u030-m span{position:absolute;left:0;top:0;line-height:24px;font-size:16.5px;font-weight:760;letter-spacing:-.03em;transition:transform .45s var(--ux-ease),opacity .3s}
+.u030-nav{display:flex;gap:4px}
+.u030-nav button{width:34px;height:34px;border:0;padding:0;border-radius:50%;background:var(--ux-surface-2);color:var(--ux-ink);display:grid;place-items:center;transition:transform .35s var(--ux-spring),background-color .2s}
+.u030-nav button:hover{background:var(--ux-surface-3)}
+.u030-nav button:active{transform:scale(.88)}
+.u030-nav button[aria-disabled="true"]{opacity:.35}
+.u030-nav button:focus-visible{outline:2px solid var(--ux-accent);outline-offset:2px}
+.u030-nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.u030-wk{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px;font-size:12px;font-weight:700;color:var(--ux-ink-3);text-align:center}
+.u030-wk span:last-child{color:var(--ux-danger)}
+.u030-view{position:relative;height:276px;overflow:hidden}
+.u030-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(6,1fr);row-gap:2px;transition:transform .45s var(--ux-ease),opacity .35s var(--ux-ease)}
+.u030-cell{position:relative;display:grid;place-items:center}
+.u030-cell::before{content:"";position:absolute;left:0;right:0;top:5px;bottom:5px;background:var(--ux-accent-soft);opacity:0;transition:opacity .2s var(--ux-ease)}
+.u030-cell.in::before{opacity:1}
+.u030-cell.s::before{left:50%;border-radius:0}
+.u030-cell.e::before{right:50%}
+.u030-cell.s.e::before{opacity:0}
+.u030-cell:nth-child(7n+1).in::before{border-radius:12px 0 0 12px}
+.u030-cell:nth-child(7n).in::before{border-radius:0 12px 12px 0}
+.u030-d{position:relative;width:40px;height:40px;border:0;padding:0;border-radius:50%;background:none;font-size:14.5px;font-weight:620;color:var(--ux-ink);font-variant-numeric:tabular-nums;transition:background-color .2s var(--ux-ease),color .2s,transform .35s var(--ux-spring)}
+.u030-d:hover{background:var(--ux-surface-2)}
+.u030-d:focus-visible{outline:2px solid var(--ux-accent);outline-offset:1px}
+.u030-d.off{color:var(--ux-ink-3);opacity:.45}
+.u030-d.today::after{content:"";position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--ux-accent)}
+.u030-cell.s .u030-d,.u030-cell.e .u030-d{background:var(--ux-accent);color:var(--ux-accent-ink);font-weight:760;box-shadow:0 8px 16px -8px color-mix(in srgb,var(--ux-accent) 80%,transparent);animation:u030-pick .4s var(--ux-spring)}
+.u030-cell.s .u030-d.today::after,.u030-cell.e .u030-d.today::after{background:var(--ux-accent-ink)}
+@keyframes u030-pick{from{transform:scale(.7)}
+}
+.u030-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:12px 4px 0;border-top:1px solid var(--ux-line)}
+.u030-sum{font-size:13.5px;font-weight:650;color:var(--ux-ink-2)}
+.u030-sum b{color:var(--ux-ink)}
+.u030-ok{height:42px;padding:0 18px;border:0;border-radius:13px;background:var(--ux-ink);color:var(--ux-page);font-size:14px;font-weight:700;transition:opacity .3s,transform .35s var(--ux-spring)}
+.u030-ok[aria-disabled="true"]{opacity:.3}
+.u030-ok:active{transform:scale(.95)}
+.u030-ok:focus-visible{outline:2px solid var(--ux-accent);outline-offset:2px}
+/* The row under the archive filters that holds the range and the "flagged only" switch. */
+.u030-bar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px 20px;padding:8px 0 0}
+.u030-bar[hidden]{display:none}
+.u030-details summary{cursor:pointer;font-weight:650;padding:6px 0;list-style-position:inside}
+.u030-details summary b{font-weight:650;color:var(--ux-accent,#3d6b2c)}
+.u030-details[open] summary{margin-bottom:10px}
+.u030-clear{margin-left:8px}

@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -998,6 +998,136 @@ const path = require("node:path");
         fullPage: true,
       });
     }
+    // UI elements #011 #012 #018 #030 (lucianLabs prompts), as the owner of the demo company.
+    await page.locator("#demo-role").selectOption({ label: "Chủ cửa hàng" });
+    await page.waitForFunction(() => !document.querySelector("#upload-button").disabled);
+    await page.locator("#quick-create:not([hidden])").waitFor();
+    check(
+      "Quick create offers the owner all four actions",
+      (await page.locator(".u011-it:not([hidden])").count()) === 4,
+    );
+    await page.locator(".u011-fab").click();
+    check(
+      "Quick create opens and names its close action",
+      (await page.locator(".u011-fab").getAttribute("aria-expanded")) === "true" &&
+        (await page.locator(".u011-fab").getAttribute("aria-label")) === "Đóng menu",
+    );
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("ArrowRight");
+    check(
+      "Arrow keys move between the quick actions and wrap around",
+      (await page.evaluate(() => document.activeElement.dataset.action)) === "upload",
+    );
+    await page.keyboard.press("Escape");
+    check(
+      "Escape closes quick create and returns focus to the button",
+      (await page.locator(".u011-fab").getAttribute("aria-expanded")) === "false" &&
+        (await page.evaluate(() => document.activeElement.classList.contains("u011-fab"))),
+    );
+    await page.locator(".u011-fab").click();
+    await page.locator('.u011-it[data-action="invoice"]').click();
+    await page.locator("#invoice-form:not([hidden])").waitFor();
+    await waitText(".u011-note", "Đã mở hoá đơn mới");
+    check("The invoice action opens a new issued invoice", await page.locator("#invoices-view").isVisible());
+    const qtyLine = page.locator(".invoice-line").first();
+    await qtyLine.locator('[data-key="unit_price"]').fill("129");
+    await qtyLine.locator(".u018-b.pl").click();
+    await qtyLine.locator(".u018-b.pl").click();
+    await page.waitForFunction(() => document.querySelector(".u018-total").textContent.replace(/\s/g, "") === "387,00CZK");
+    check(
+      "The stepper changes the line's own quantity and the amount follows",
+      (await qtyLine.locator('[data-key="quantity"]').inputValue()) === "3",
+    );
+    for (let i = 0; i < 3; i++) await qtyLine.locator(".u018-b.mi").click({ force: true });
+    check(
+      "The stepper stops at one and shakes instead of going lower",
+      (await qtyLine.locator('[data-key="quantity"]').inputValue()) === "1" &&
+        (await qtyLine.locator(".u018-step").getAttribute("class")).includes("is-shake") &&
+        (await qtyLine.locator(".u018-b.mi").getAttribute("aria-disabled")) === "true",
+    );
+    await qtyLine.locator('[data-key="quantity"]').fill("2,5");
+    await page.waitForFunction(() => document.querySelector(".u018-total").textContent.replace(/\s/g, "") === "322,50CZK");
+    check(
+      "A decimal quantity can still be typed and is shown as typed",
+      (await qtyLine.locator(".u018-raw").innerText()) === "2,5",
+    );
+    await page.locator("#invoice-cancel").click();
+    await page.locator(".u011-fab").click();
+    await page.locator('.u011-it[data-action="upload"]').click();
+    await page.waitForFunction(() => document.activeElement?.id === "upload-file");
+    check("The upload action opens the documents with the file field focused", await page.locator("#docs-view").isVisible());
+    await page.locator(".document").first().getByRole("button", { name: "Dữ liệu hóa đơn" }).click();
+    await page.locator("#doc-flag:not([hidden])").waitFor();
+    const flagsBefore = Number((await page.locator(".u012-num").innerText()).split(" ")[0]);
+    await page.locator(".u012-btn").click();
+    await page.waitForFunction(
+      (n) => document.querySelector(".u012-num").textContent.startsWith(String(n + 1) + " ") &&
+        document.querySelector(".u012-btn").getAttribute("aria-pressed") === "true",
+      flagsBefore,
+    );
+    check("The review ribbon marks the document and counts it", true);
+    await page.locator("#close-extract").click();
+    await page.locator(".document .badge", { hasText: "Cần xem lại" }).first().waitFor();
+    await page.locator("#f-flagged").check();
+    await page.waitForFunction((n) => document.querySelectorAll(".document").length === n, flagsBefore + 1);
+    check("The archive can show only the marked documents", true);
+    await page.locator("#f-clear").click();
+    await page.waitForFunction(() => !document.querySelector("#f-flagged").checked);
+    await page.locator("#range-filter summary").click();
+    const days = page.locator(".u030-d:not(:disabled)");
+    check("Days after today cannot be picked in the archive range", (await page.locator(".u030-d.off").count()) === (await page.evaluate(() => {
+      const [y, m, d] = pragueToday().split("-").map(Number);
+      return new Date(Date.UTC(y, m, 0)).getUTCDate() - d;
+    })));
+    // The previous month always has whole days to pick, whatever today is.
+    await page.locator('.u030-nav button[data-step="-1"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".u030-grid").length === 1);
+    await days.first().click();
+    await days.last().click();
+    check(
+      "Picking two days fills both ends and enables apply",
+      (await page.locator(".u030-ok").getAttribute("aria-disabled")) === "false" &&
+        !(await page.locator(".u030-b").getAttribute("class")).includes("ph"),
+    );
+    await page.locator(".u030-ok").click();
+    const [lastFrom, lastTo] = await page.evaluate(() => {
+      const [y, m] = pragueToday().split("-").map(Number);
+      const first = new Date(Date.UTC(y, m - 2, 1)), last = new Date(Date.UTC(y, m - 1, 0));
+      return [first.toISOString().slice(0, 10), last.toISOString().slice(0, 10)];
+    });
+    check(
+      "Applying the range filters the archive by those days",
+      (await page.locator("#f-from").inputValue()) === lastFrom &&
+        (await page.locator("#f-to").inputValue()) === lastTo &&
+        !(await page.locator("#range-clear").isHidden()),
+    );
+    // Codex review, PR #20: "clear filters" must reload without the applied range.
+    const cleared = page.waitForRequest((r) => r.url().includes("/archive"));
+    await page.locator("#f-clear").click();
+    check(
+      "Clearing the filters reloads the archive without the date range",
+      !(await cleared).url().includes("date_from") && (await page.locator("#f-from").inputValue()) === "",
+    );
+    // Codex review, PR #20: the same day twice is a one-day range.
+    await page.locator('.u030-nav button[data-step="1"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".u030-grid").length === 1);
+    await page.locator(".u030-d.today").click();
+    await page.locator(".u030-d.today").click();
+    await page.locator(".u030-ok").click();
+    const todayIso = await page.evaluate(() => pragueToday());
+    check(
+      "One day can be chosen by picking it twice",
+      (await page.locator("#f-from").inputValue()) === todayIso && (await page.locator("#f-to").inputValue()) === todayIso,
+    );
+    await page.locator("#range-clear").click();
+    check("The range can be cleared again", (await page.locator("#f-from").inputValue()) === "");
+    await page.locator("#demo-role").selectOption({ label: "Kế toán" });
+    await page.waitForFunction(() => document.querySelector("#role-badge").textContent === "Kế toán");
+    check(
+      "Quick create follows the role: the accountant cannot upload",
+      await page.locator('.u011-it[data-action="upload"]').isHidden(),
+    );
+    await page.locator("#tasks-tab").click();
     await page.setViewportSize({ width: 390, height: 844 });
     check(
       "Mobile layout has no horizontal overflow",
@@ -1022,6 +1152,7 @@ const path = require("node:path");
       "Deselecting company clears task details",
       (await page.locator("#reply-body").count()) === 0,
     );
+    check("Deselecting company hides quick create", await page.locator("#quick-create").isHidden());
     check(
       "Deselecting company clears financial summary",
       (await page.locator("#metric-active").innerText()) === "—",

@@ -542,10 +542,13 @@ function archiveQuery() {
     ["month", "f-month"],
     ["category", "f-category"],
     ["status", "f-status"],
+    ["date_from", "f-from"],
+    ["date_to", "f-to"],
   ]) {
     const value = $(id).value.trim();
     if (value) params.set(key, value);
   }
+  if ($("f-flagged").checked) params.set("flagged", "true");
   const query = params.toString();
   return query ? "?" + query : "";
 }
@@ -659,6 +662,7 @@ function renderDocs() {
       flags.append(text("span", t("incompleteData"), "badge warn"));
     if (doc.possible_duplicates?.length)
       flags.append(text("span", t("possibleDuplicate"), "badge warn"));
+    if (doc.flagged) flags.append(text("span", t("flagTag"), "badge warn"));
     if (flags.children.length) info.append(flags);
     row.append(
       info,
@@ -1504,7 +1508,7 @@ $("extract-request-changes").onclick = () =>
   );
 let filterTimer;
 const refilter = () => run(() => loadDocs());
-for (const id of ["f-month", "f-category", "f-status"])
+for (const id of ["f-month", "f-category", "f-status", "f-flagged"])
   $(id).onchange = refilter;
 $("f-q").oninput = () => {
   clearTimeout(filterTimer);
