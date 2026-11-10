@@ -14,6 +14,8 @@
     <script src="filing.js" defer></script>
     <script src="goods.js" defer></script>
     <script src="bank.js" defer></script>
+    <script src="cash-control.js" defer></script>
+    <script src="staff.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -104,6 +106,7 @@
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
         ><button id="bank-tab" class="tab" hidden data-i18n="bankTab"></button
+        ><button id="staff-tab" class="tab" hidden data-i18n="staffTab"></button
         ><button id="legal-tab" class="tab" data-i18n="legalTab"></button
         ><button
           id="invoices-tab"
@@ -244,6 +247,29 @@
           /></label>
         </div>
         <div id="cash-report" class="cash-report" aria-live="polite"></div>
+        <section id="cash-control" class="cash-control" hidden aria-labelledby="close-title">
+          <form id="close-form" class="close-form" novalidate>
+            <h3 id="close-title" data-i18n="closeTitle"></h3>
+            <p class="muted small" data-i18n="closeHint"></p>
+            <label><span data-i18n="closeDate"></span><input id="close-date" type="date" /></label>
+            <label><span data-i18n="openingFloat"></span><input id="close-opening" inputmode="decimal" autocomplete="off" /></label>
+            <label><span data-i18n="countedCash"></span><input id="close-counted" inputmode="decimal" autocomplete="off" /></label>
+            <label class="wide"><span data-i18n="note"></span><input id="close-note" maxlength="300" autocomplete="off" /></label>
+            <p id="close-result" class="close-result wide" aria-live="polite"></p>
+            <button id="close-save" class="primary" type="submit" data-i18n="closeTill"></button>
+          </form>
+          <div class="leak-panel">
+            <h3 data-i18n="leakTitle"></h3>
+            <div id="leak-summary" class="leak-summary"></div>
+            <p id="leak-missing-hint" class="muted small" data-i18n="leakMissingHint"></p>
+            <div id="leak-missing" class="leak-missing"></div>
+            <h4 id="leak-undocumented-title"></h4>
+            <ul id="leak-undocumented" class="leak-undocumented"></ul>
+            <h4 data-i18n="flowTitle"></h4>
+            <div id="cash-flow" class="cash-flow"></div>
+            <p class="muted small" data-i18n="flowHint"></p>
+          </div>
+        </section>
         <form id="cash-form" class="cash-form" novalidate>
           <label
             ><span data-i18n="cashKind"></span
@@ -459,6 +485,50 @@
             <button id="profile-save" class="primary" type="submit" data-i18n="saveProfile"></button>
           </form>
         </div>
+      </section>
+      <section id="staff-view" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 data-i18n="staffTab"></h2>
+            <p class="muted" data-i18n="staffHint"></p>
+          </div>
+          <label class="cash-month"><span data-i18n="staffWeek"></span><input id="staff-week" type="date" /></label>
+        </div>
+        <div class="staff-grid">
+          <div>
+            <h3 data-i18n="staffPeople"></h3>
+            <ul id="staff-people" class="staff-people"></ul>
+            <form id="staff-form" class="staff-form" novalidate>
+              <label><span data-i18n="staffName"></span><input id="staff-name" maxlength="80" autocomplete="off" /></label>
+              <label><span data-i18n="staffJob"></span><input id="staff-job" maxlength="60" autocomplete="off" /></label>
+              <label><span data-i18n="staffRate"></span><input id="staff-rate" inputmode="decimal" autocomplete="off" /></label>
+              <label class="check"><input id="staff-minor" type="checkbox" /><span data-i18n="staffMinor"></span></label>
+              <button id="staff-add" class="secondary" type="submit" data-i18n="staffAdd"></button>
+            </form>
+          </div>
+          <div>
+            <h3 data-i18n="shiftTitle"></h3>
+            <form id="shift-form" class="shift-form" novalidate>
+              <label><span data-i18n="staffName"></span><select id="shift-staff"></select></label>
+              <label><span data-i18n="cashDate"></span><input id="shift-date" type="date" /></label>
+              <label><span data-i18n="shiftStart"></span><input id="shift-start" type="time" value="09:00" /></label>
+              <label><span data-i18n="shiftEnd"></span><input id="shift-end" type="time" value="17:30" /></label>
+              <label><span data-i18n="shiftBreak"></span><input id="shift-break" type="number" min="0" max="600" value="30" /></label>
+              <label><span data-i18n="shiftTips"></span><input id="shift-tips" inputmode="decimal" autocomplete="off" /></label>
+              <button id="shift-add" class="primary" type="submit" data-i18n="shiftAdd"></button>
+            </form>
+          </div>
+        </div>
+        <h3 id="shift-period"></h3>
+        <div class="goods-scroll">
+          <table class="shift-table">
+            <thead><tr><th data-i18n="staffName"></th><th data-i18n="shiftCount"></th><th data-i18n="shiftHours"></th><th data-i18n="labourCost"></th><th data-i18n="shiftTips"></th><th></th></tr></thead>
+            <tbody id="shift-summary"></tbody>
+          </table>
+        </div>
+        <p id="shift-unpriced" class="muted small"></p>
+        <ul id="shift-list" class="shift-list"></ul>
+        <p class="muted small" data-i18n="shiftLawHint"></p>
       </section>
       <section id="bank-view" class="panel" hidden>
         <div class="section-heading">

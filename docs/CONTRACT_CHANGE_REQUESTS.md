@@ -348,3 +348,36 @@ Counts only; no document data leaves its company. No schema change.
   left out.
 - Not included: live bank connections (Fio API token, bank e-mail notifications — owner
   decisions E/H), e-mailing reminders, late-payment interest.
+
+## CR-12 · Staff, shifts and tips; daily cash close, leakage signals, weekly cash flow
+
+- Requested by: the owner ("người làm chủ có thể quản lý nhân viên, thu chi, dòng tiền, thất
+  thoát"), 2026-11-09/10 · Implemented in: `claude/staff-cash`
+- Status: proposed in PR · Depends on: CR-4, CR-11
+
+- Migration `0011_staff_cash_control`: `staff_members` (display name, job, optional hourly rate,
+  `minor` flag, `active`, `version` — nothing else about the person), `shifts` (date, start, end,
+  break minutes, tips, note; Idempotency-Key with `request_hash`; voided, never deleted),
+  `cash_closes` (one per company and day: opening float, counted, expected and difference as
+  counted, `version`).
+- `GET|POST /v1/organizations/{org}/staff`, `PUT …/staff/{id}` (needs `expected_version`; 409 when
+  stale). Owner and accountant only.
+- `POST …/shifts` (Idempotency-Key; 422 for a future date, an unknown person, equal start/end or
+  a break as long as the shift; an end before the start runs past midnight),
+  `POST …/shifts/{id}/void {reason}`, `GET …/shifts?from=&to=` (≤ 62 days) → shifts with
+  `worked_minutes` and `findings`, `summary` per person (minutes, labour cost = hours × rate or
+  null, tips) and `totals`. Findings (SÚIP/MPSV): `shift_too_long` (> 12 h worked),
+  `break_missing` (> 6 h, under 18 > 4.5 h, with < 30 min break), `rest_too_short` (< 11 h since
+  the person's previous shift), `shift_overlap`. Prompts, not verdicts.
+- `PUT …/cash-closes/{date} {opening_float, counted_cash, note?, expected_version}`: expected =
+  opening + CZK cash income − cash expenses of that day; `null` version creates (409 if the day is
+  closed), a version recounts (409 when stale, checked in the update). No future days.
+- `GET …/cash-control?month=` → days with cash income/expense, the close and
+  `changed_since_close`; totals of shortages and surpluses, `days_without_close` (cash sales,
+  no count, before today); cash/card expenses ≥ 500 Kč without a document; suggested opening
+  float from the last close.
+- `GET …/cash-closes/{date}` → that day's close (or null), its cash income/expense and the
+  suggested opening float from the previous close, independent of the month shown.
+- `GET …/cash-flow?weeks=1..26` → per week cash from the cashbook; for a week with an imported
+  statement, bank and card money from the statement (card payments and terminal payouts pass
+  through the account; `card.included_in_statement`), otherwise card and bank from the cashbook.

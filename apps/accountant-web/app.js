@@ -188,6 +188,8 @@ function resetContext() {
   if (typeof resetSuppliers === "function") resetSuppliers();
   if (typeof resetGoods === "function") resetGoods();
   if (typeof resetBank === "function") resetBank();
+  if (typeof resetStaff === "function") resetStaff();
+  if (typeof resetCashControl === "function") resetCashControl();
   $("cash-form").reset();
   $("cash-month").value = pragueToday().slice(0, 7);
   $("c-date").value = pragueToday();
@@ -258,6 +260,7 @@ async function refresh() {
     invoicesReady() ? loadInvoices() : null,
     typeof loadPortfolio === "function" ? loadPortfolio() : null,
     typeof loadBank === "function" ? loadBank() : null,
+    typeof loadStaff === "function" ? loadStaff() : null,
   ]);
   if (state.task) await selectTask(state.task.id);
 }
@@ -726,6 +729,7 @@ async function loadCash() {
   if (ticket !== state.cashTicket) return;
   state.cash = { book, report };
   renderCash();
+  if (typeof loadCashControl === "function") await loadCashControl();
 }
 function breakdown(title, rows) {
   const box = text("div", ""),
@@ -1230,6 +1234,11 @@ function translate() {
   if (typeof renderSuppliers === "function") renderSuppliers();
   if (typeof renderGoods === "function") renderGoods();
   if (typeof renderBank === "function" && !$("bank-tab").hidden) renderBank();
+  if (typeof renderStaff === "function" && staffState.period) renderStaff();
+  if (typeof renderCashControl === "function" && cashControl.data) {
+    renderCashControl();
+    if (cashControl.day) $("close-save").textContent = t(cashControl.day.close ? "recountTill" : "closeTill");
+  }
   renderOrgOptions(state.org);
   if (state.role) $("role-badge").textContent = t(state.role);
   if (state.demo) renderDemoRoles();
@@ -1251,7 +1260,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["portfolio", "tasks", "docs", "cash", "bank", "invoices", "legal"]) {
+  for (const name of ["portfolio", "tasks", "docs", "cash", "bank", "staff", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
