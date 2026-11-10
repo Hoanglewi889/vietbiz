@@ -19,7 +19,7 @@ const path = require("node:path");
   page.on("pageerror", (e) => errors.push(e.message));
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -744,6 +744,47 @@ const path = require("node:path");
       isdocFile.suggestedFilename() === "faktura-" + year + "-0001.isdoc" &&
         isdocText.includes("<VATApplicable>true</VATApplicable>") &&
         isdocText.includes("<PayableAmount>464.56</PayableAmount>"),
+    );
+    // CR-12: staff, shifts with tips and Labour Code prompts; the daily cash close.
+    await page.locator("#staff-tab").click();
+    await page.locator("#staff-name").fill("Synthetic Lan");
+    await page.locator("#staff-rate").fill("180");
+    await page.locator("#staff-add").click();
+    await waitText("#staff-people", "Synthetic Lan");
+    await page.locator("#staff-name").fill("Synthetic Minh");
+    await page.locator("#staff-minor").check();
+    await page.locator("#staff-add").click();
+    await waitText("#staff-people", "Synthetic Minh");
+    await page.locator("#shift-staff").selectOption({ label: "Synthetic Lan" });
+    await page.locator("#shift-tips").fill("250");
+    await page.locator("#shift-add").click();
+    await waitText("#shift-summary", "Synthetic Lan");
+    await page.locator("#shift-staff").selectOption({ label: "Synthetic Minh" });
+    await page.locator("#shift-start").fill("09:00");
+    await page.locator("#shift-end").fill("14:00");
+    await page.locator("#shift-break").fill("0");
+    await page.locator("#shift-add").click();
+    await waitText("#shift-list", "Synthetic Minh");
+    const shiftText = (await page.locator("#staff-view").innerText()).replace(/\s/g, " ");
+    check(
+      "Shifts sum hours, labour cost and tips per person",
+      shiftText.includes("1 440,00") && shiftText.includes("250,00") && shiftText.includes("Chưa có lương giờ nên chưa tính tiền công: Synthetic Minh"),
+    );
+    check(
+      "A person under 18 working 5 hours without a break is flagged",
+      (await page.locator(".shift-item.flagged").count()) === 1 && shiftText.includes("sau 4,5 h phải nghỉ ít nhất 30 phút"),
+    );
+    await page.locator("#cash-tab").click();
+    await page.locator("#cash-control:not([hidden])").waitFor();
+    await page.locator("#close-opening").fill("2000");
+    await page.locator("#close-counted").fill("1900");
+    await page.locator("#close-save").click();
+    await page.waitForFunction(() => /đếm được 1\s900,00/.test(document.querySelector("#close-result").textContent));
+    check(
+      "The daily cash close compares the counted till with the cashbook",
+      /^(Thiếu|Thừa|Khớp)/.test(await page.locator("#close-result").innerText()) &&
+        (await page.locator("#close-save").innerText()) === "Đếm lại" &&
+        (await page.locator(".flow-row").count()) === 8,
     );
     // CR-11: a bank statement pays the invoice by its variable symbol; the rest is decided by hand.
     const gpcLine = (hal, code, vs, ref, counter = "19") =>
