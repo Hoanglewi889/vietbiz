@@ -78,8 +78,8 @@ def test_import_matches_full_and_partial_payments_and_leaves_the_rest_to_a_perso
     assert send(org, employee, statement).status_code == 403
     r = send(org, accountant, statement)
     assert r.status_code == 201, r.text
-    assert r.json() | {'import_id': None} == {'import_id': None, 'format': 'gpc', 'rows': 5, 'added': 5,
-                                              'already_known': 0, 'auto_matched': 2}
+    summary = {k: r.json()[k] for k in ('format', 'rows', 'added', 'already_known', 'auto_matched')}
+    assert summary == {'format': 'gpc', 'rows': 5, 'added': 5, 'already_known': 0, 'auto_matched': 2}
     assert send(org, owner, statement).status_code == 409
     # An overlapping statement adds only what is new.
     again = send(org, owner, gpc(gpc_075(46456, '2', vs=full['variable_symbol'], counter='19', ref='11'),

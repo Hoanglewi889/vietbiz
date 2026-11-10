@@ -550,6 +550,23 @@
           ><button id="bank-filter-ignored" class="bank-chip" type="button"></button>
         </div>
         <div id="bank-list" class="bank-list" aria-live="polite"></div>
+        <div class="register-grid">
+          <section aria-labelledby="register-title">
+            <h3 id="register-title" data-i18n="statementRegister"></h3>
+            <p class="muted small" data-i18n="statementRegisterHint"></p>
+            <ul id="statement-breaks" class="statement-breaks"></ul>
+            <ul id="statement-register" class="statement-register"></ul>
+            <div id="statement-coverage" class="statement-coverage"></div>
+          </section>
+          <section aria-labelledby="payout-title">
+            <div class="goods-head">
+              <h3 id="payout-title" data-i18n="payoutTitle"></h3>
+              <label><span class="sr-only" data-i18n="month"></span><input id="payout-month" type="month" /></label>
+            </div>
+            <p id="payout-summary" class="payout-summary"></p>
+            <p class="muted small" data-i18n="payoutHint"></p>
+          </section>
+        </div>
       </section>
       <section id="legal-view" class="panel" hidden>
         <div class="section-heading">

@@ -855,6 +855,22 @@ const path = require("node:path");
     await feeRow.getByRole("button", { name: "Không cần chứng từ" }).click();
     await waitText("#bank-filter-ignored", "(1)");
     check("A bank fee is marked as needing no document", (await page.locator(".bank-row").count()) === 2);
+    // CR-13: the statement file is kept with its account and period, with monthly coverage.
+    await page.locator("#statement-register .statement-row").first().waitFor();
+    const register = await page.locator("#statement-register").innerText();
+    check(
+      "The imported statement is listed with its account and period, ready to download",
+      (await page.locator("#statement-register .statement-row").count()) === 1 &&
+        register.includes("1234567890") &&
+        (await page.locator("#statement-register button").innerText()) === "Tải về" &&
+        (await page.locator(".coverage-cell").count()) >= 1 &&
+        (await page.locator("#payout-summary").innerText()).includes("Bán bằng thẻ"),
+    );
+    const [statementDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("#statement-register button").click(),
+    ]);
+    check("The original statement file downloads unchanged", statementDownload.suggestedFilename() === "vypis.gpc");
     await page.locator("#invoices-tab").click();
     await waitText("#invoice-list", "đã trả");
     check(
