@@ -1101,6 +1101,24 @@ const path = require("node:path");
         (await page.locator("#f-to").inputValue()) === lastTo &&
         !(await page.locator("#range-clear").isHidden()),
     );
+    // Codex review, PR #20: "clear filters" must reload without the applied range.
+    const cleared = page.waitForRequest((r) => r.url().includes("/archive"));
+    await page.locator("#f-clear").click();
+    check(
+      "Clearing the filters reloads the archive without the date range",
+      !(await cleared).url().includes("date_from") && (await page.locator("#f-from").inputValue()) === "",
+    );
+    // Codex review, PR #20: the same day twice is a one-day range.
+    await page.locator('.u030-nav button[data-step="1"]').click();
+    await page.waitForFunction(() => document.querySelectorAll(".u030-grid").length === 1);
+    await page.locator(".u030-d.today").click();
+    await page.locator(".u030-d.today").click();
+    await page.locator(".u030-ok").click();
+    const todayIso = await page.evaluate(() => pragueToday());
+    check(
+      "One day can be chosen by picking it twice",
+      (await page.locator("#f-from").inputValue()) === todayIso && (await page.locator("#f-to").inputValue()) === todayIso,
+    );
     await page.locator("#range-clear").click();
     check("The range can be cleared again", (await page.locator("#f-from").inputValue()) === "");
     await page.locator("#demo-role").selectOption({ label: "Kế toán" });

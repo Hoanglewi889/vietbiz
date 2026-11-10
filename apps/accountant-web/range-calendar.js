@@ -1,7 +1,7 @@
 // Lucian UX/UI Prompt #030 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#030
 "use strict";
 // Date range calendar (#030) for the document archive: pick the first day, move the pointer and
-// the band follows, pick the last day and it holds. "Apply" filters the archive by issue date
+// the band follows, pick the last day and it holds (the same day twice is a one-day range). "Apply" filters the archive by issue date
 // (date_from / date_to). Days after today are the disabled ones; months before are open.
 // The "flagged only" switch (#012) sits in the same row and is cleared with the filters.
 (function () {
@@ -171,7 +171,7 @@
     if (start === null || end !== null) {
       start = k;
       end = null;
-    } else if (k === start) end = null;
+    } else if (k === start) end = k; // a second click on the first day: that one day
     else {
       end = Math.max(k, start);
       start = Math.min(k, start);
@@ -263,9 +263,10 @@
     },
     true,
   );
+  // Clear now, before f-clear reloads: a hidden input keeps an assigned value through reset().
   $("archive-filters").addEventListener("reset", () => {
     $("f-flagged").checked = false;
-    setTimeout(clear);
+    clear();
   });
   new MutationObserver(() => (bar.hidden = $("archive-filters").hidden)).observe($("archive-filters"), {
     attributes: true,
