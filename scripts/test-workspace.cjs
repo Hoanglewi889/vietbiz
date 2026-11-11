@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -1177,6 +1177,46 @@ const path = require("node:path");
         (await page.locator("#profile-org option").count()) === 1 &&
         (await page.locator("#profile-save").isDisabled()),
     );
+    // #088: a company without tasks shows the folder with templates; one click creates a task.
+    const fresh = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    fresh.on("pageerror", (e) => errors.push(e.message));
+    fresh.on("console", (m) => {
+      if (m.text().includes("Content Security Policy")) cspViolations.push(m.text());
+    });
+    const apiBase = new URL(process.env.VIETBIZ_UI_URL || "http://127.0.0.1:8000/workspace/").origin;
+    const owner = await (await fresh.request.post(apiBase + "/dev/users?display_name=Folder%20owner")).json();
+    await fresh.request.post(apiBase + "/v1/organizations", {
+      headers: { "X-User": owner.id },
+      data: { name: "Synthetic empty company" },
+    });
+    await fresh.goto(process.env.VIETBIZ_UI_URL || "http://127.0.0.1:8000/workspace/");
+    await fresh.locator(".advanced-connection summary").click();
+    await fresh.locator("#api").fill(apiBase);
+    await fresh.locator("#user").fill(owner.id);
+    await fresh.locator('#connect-form button[type="submit"]').click();
+    await fresh.locator(".u088").waitFor();
+    check(
+      "A company without tasks shows the folder with three templates",
+      (await fresh.locator(".u088-tpl button").count()) === 3 &&
+        (await fresh.locator(".u088-t").innerText()) === "Chưa có công việc nào",
+    );
+    await fresh.locator("#overdue-filter").check();
+    await fresh.locator(".task-list .empty, #task-list .empty").first().waitFor();
+    check("With a filter set the plain empty message stays", (await fresh.locator(".u088").count()) === 0);
+    await fresh.locator("#overdue-filter").uncheck();
+    await fresh.locator(".u088").waitFor();
+    const month = await fresh.evaluate(() => pragueToday().slice(5, 7) + "/" + pragueToday().slice(0, 4));
+    const posts = [];
+    fresh.on("request", (r) => r.method() === "POST" && r.url().endsWith("/tasks") && posts.push(r.headers()["idempotency-key"]));
+    await fresh.locator(".u088-tpl button").first().click();
+    await fresh.waitForFunction(() => document.querySelector("#notice").textContent.includes("Đã tạo việc"));
+    check(
+      "Choosing a template creates that task through the API with an idempotency key and opens it",
+      (await fresh.locator(".task-item h3").innerText()) === "Thu thập chứng từ tháng " + month &&
+        (await fresh.locator(".task-item").count()) === 1 && posts.length === 1 && !!posts[0],
+    );
+    check("The folder is gone once there is a task", (await fresh.locator(".u088").count()) === 0);
+    await fresh.close();
     // Report 10.11.2026, gap 1: OIDC login with PKCE against a mocked identity provider.
     const login = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     login.on("pageerror", (e) => errors.push(e.message));

@@ -444,3 +444,14 @@ Counts only; no document data leaves its company. No schema change.
   response.
 - Web: `login.js` (PKCE login, token in memory, logout), `Authorization: Bearer` instead of
   `X-User` when signed in; step-up and 429 messages in VI/CS.
+
+## CR-16 · UI element #088: empty task list with task templates
+
+- Requested by: the owner (lucianLabs UI prompt #088), 2026-11-11 · Implemented in:
+  `claude/empty-folder` · Status: proposed in PR · Depends on: CR-15 (stacked branch)
+- Web only, no API or schema change. When the task list is empty with no filter and the role
+  may create tasks (owner, accountant), the list shows the folder and three templates:
+  "Thu thập chứng từ tháng MM/YYYY", "Đối chiếu sao kê ngân hàng tháng MM/YYYY",
+  "Hoàn thiện hồ sơ khách hàng" (CS equivalents). A template creates the task through
+  `POST …/tasks` with an Idempotency-Key, then opens it. Filtered-empty lists keep the
+  plain message. Files: `empty-folder.css/js`, one hook in `renderTasks`.

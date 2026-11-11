@@ -1,0 +1,182 @@
+/* Lucian UX/UI Prompt #088 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#088 */
+/* Empty task list: a floating folder with three task templates. Hovering a template opens the
+   folder a little; choosing one flies a sheet into it, the folder swallows it and the list
+   appears with the new task. Only the empty half of the original is used: the task list,
+   its count and its actions stay VietBiz's own. The 340 × 420 demo card becomes the list's
+   empty area. */
+.u088 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 22px 34px;
+  text-align: center;
+}
+.u088-art {
+  position: relative;
+  width: 168px;
+  height: 138px;
+}
+.u088-fl {
+  animation: u088-f 5s ease-in-out infinite;
+}
+@keyframes u088-f {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.u088-art svg {
+  display: block;
+  width: 168px;
+  height: 128px;
+  overflow: visible;
+  transform-origin: 50% 92%;
+}
+.u088-sh {
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  bottom: 0;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--ux-ink) 16%, transparent), transparent);
+  animation: u088-s 5s ease-in-out infinite;
+}
+@keyframes u088-s {
+  50% {
+    transform: scaleX(0.8);
+    opacity: 0.6;
+  }
+}
+.u088-front,
+.u088-pp {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 0.55s var(--ux-spring);
+}
+.u088-pp.b {
+  transition-delay: 0.04s;
+}
+.u088-art:hover .u088-front,
+.u088:has(.u088-tpl button:hover, .u088-tpl button:focus-visible) .u088-front {
+  transform: skewX(-7deg) scaleY(0.86);
+}
+.u088-art:hover .u088-pp.a,
+.u088:has(.u088-tpl button:hover, .u088-tpl button:focus-visible) .u088-pp.a {
+  transform: translateY(-10px) rotate(-5deg);
+}
+.u088-art:hover .u088-pp.b,
+.u088:has(.u088-tpl button:hover, .u088-tpl button:focus-visible) .u088-pp.b {
+  transform: translateY(-6px) rotate(4deg);
+}
+.u088 .u088-art.eat .u088-front {
+  transform: skewX(-12deg) scaleY(0.74);
+}
+.u088 .u088-art.eat .u088-pp.a {
+  transform: translateY(-14px) rotate(-7deg);
+}
+.u088 .u088-art.eat .u088-pp.b {
+  transform: translateY(-10px) rotate(6deg);
+}
+.u088-art.gulp svg {
+  animation: u088-gulp 0.6s var(--ux-ease);
+}
+@keyframes u088-gulp {
+  30% {
+    transform: scale(1.08, 0.88);
+  }
+  62% {
+    transform: scale(0.97, 1.05);
+  }
+}
+.u088-art.drop svg {
+  animation: u088-drop 0.85s var(--ux-spring) backwards;
+}
+@keyframes u088-drop {
+  from {
+    transform: translateY(-46px) scale(0.85);
+    opacity: 0;
+  }
+}
+.u088-t {
+  margin: 12px 0 0;
+  font-size: 18.5px;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+}
+.u088-s {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ux-ink-3);
+}
+.u088-tpl {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+}
+.u088-tpl button {
+  height: 38px;
+  padding: 0 12px 0 8px;
+  border: 0;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--ux-surface-2);
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ux-ink-2);
+  transition:
+    transform 0.35s var(--ux-spring),
+    background-color 0.2s,
+    color 0.2s;
+}
+.u088-tpl button:hover {
+  background: var(--ux-surface-3);
+  color: var(--ux-ink);
+  transform: translateY(-2px);
+}
+.u088-tpl button:active {
+  transform: scale(0.94);
+}
+.u088-tpl button[aria-disabled="true"] {
+  opacity: 0.55;
+}
+.u088-tpl i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--c);
+  color: #fff;
+}
+.u088-tpl svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.u088-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  width: 26px;
+  height: 32px;
+  border-radius: 5px;
+  background:
+    linear-gradient(var(--c, #10b981) 0 7px, transparent 7px),
+    repeating-linear-gradient(180deg, transparent 0 12px, #cbd3e1 12px 14px) 5px 0 / 16px 100% no-repeat,
+    #fff;
+  box-shadow: 0 6px 14px -6px rgba(10, 12, 20, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
