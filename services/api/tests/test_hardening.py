@@ -138,3 +138,51 @@ def test_the_middleware_answers_429_and_locks_out_token_guessing(monkeypatch):
     finally:
         main.LIMITS.hits.clear()
         main.LIMITS.blocked.clear()
+
+
+def test_a_generated_key_file_is_never_visible_half_written(tmp_path, monkeypatch):
+    # Codex review, PR #21: a second worker must not read the key file before it is complete.
+    path = tmp_path / '.data-key'
+    seen = []
+    real_write = crypto.os.write
+
+    def spy(fd, data):
+        seen.append(path.exists())
+        return real_write(fd, data)
+
+    monkeypatch.setattr(crypto.os, 'write', spy)
+    crypto._create_key_file(path)
+    assert seen == [False] and len(crypto._decode(path.read_text())) == 32
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['.data-key']
+
+
+def test_workers_starting_together_share_one_complete_key(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    path, barrier = tmp_path / '.data-key', Barrier(12)
+
+    def start():
+        barrier.wait()
+        crypto._create_key_file(path)
+        return crypto._decode(path.read_text())
+
+    with ThreadPoolExecutor(12) as pool:
+        keys = set(pool.map(lambda _: start(), range(12)))
+    assert len(keys) == 1 and sorted(p.name for p in tmp_path.iterdir()) == ['.data-key']
+
+
+def test_an_allowed_origin_can_read_a_429(monkeypatch):
+    # Codex review, PR #21: CORS sits outside the limiter, so the browser sees the 429.
+    monkeypatch.setattr(main.LIMITS, 'general', 1)
+    main.LIMITS.hits.clear()
+    main.LIMITS.blocked.clear()
+    try:
+        client, origin = TestClient(main.app), {'Origin': 'http://localhost:3000'}
+        assert client.get('/health', headers=origin).status_code == 200
+        limited = client.get('/health', headers=origin)
+        assert limited.status_code == 429
+        assert limited.headers['access-control-allow-origin'] == 'http://localhost:3000'
+        assert limited.headers['x-frame-options'] == 'DENY'
+    finally:
+        main.LIMITS.hits.clear()
+        main.LIMITS.blocked.clear()

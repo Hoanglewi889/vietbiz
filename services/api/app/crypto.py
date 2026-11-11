@@ -52,13 +52,29 @@ def data_key() -> bytes:
         raise RuntimeError('VIETBIZ_DATA_KEY is required outside development/test')
     path = _data_dir() / '.data-key'
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        return _decode(path.read_text())
-    with os.fdopen(fd, 'w') as handle:
-        handle.write(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
+    _create_key_file(path)
     return _decode(path.read_text())
+
+
+def _create_key_file(path: Path) -> None:
+    """Publish a fully written key file, once. Codex review, PR #21: the key is written to a
+    private temporary file first and then hard-linked into place, so another worker starting
+    at the same moment sees either no key file or a complete one, never an empty one."""
+    if path.exists():
+        return
+    temp = path.with_name(f'.data-key.{secrets.token_hex(8)}.tmp')
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.write(fd, base64.urlsafe_b64encode(secrets.token_bytes(32)))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    try:
+        os.link(temp, path)  # atomic; fails if another worker published first
+    except FileExistsError:
+        pass
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def seal(data: bytes, context: str) -> bytes:

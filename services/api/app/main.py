@@ -33,12 +33,13 @@ DB = ROOT / 'vietbiz.sqlite3'
 MAX_BYTES = 10 * 1024 * 1024
 MIMES = {'application/pdf':'.pdf','image/jpeg':'.jpg','image/png':'.png'}
 app = FastAPI(title='VietBiz API — Sprint 10',version='0.10.0',description='LOCAL ONLY. OIDC JWT verification by default; explicit demo mode available.')
-app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
-# Hardening (report 10.11.2026, gaps 3 and 4): rate limits inside, security headers outermost
-# so that a 429 carries them too.
+# Hardening (report 10.11.2026, gaps 3 and 4). The last middleware added is the outermost:
+# rate limits innermost, then CORS (Codex review, PR #21: so an allowed origin can read a 429),
+# then security headers outermost, so every answer, a 429 included, carries them.
 from .web_security import Limits, RateLimit, SecurityHeaders, attachment_disposition
 LIMITS = Limits.from_env()
 app.add_middleware(RateLimit, limits=LIMITS)
+app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
 app.add_middleware(SecurityHeaders)
 from .crypto import data_key, document_context, seal, unseal
 data_key()  # fail at start-up, not on the first upload, when the key is missing or malformed
