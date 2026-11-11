@@ -17,7 +17,7 @@ def auth(monkeypatch):
     monkeypatch.setattr(main, 'VERIFIER', verifier)
     def token(**changes):
         now = int(datetime.now(timezone.utc).timestamp())
-        claims = dict(iss=verifier.issuer, aud=verifier.audience, sub='owner', iat=now, exp=now+300)
+        claims = dict(iss=verifier.issuer, aud=verifier.audience, sub='owner', iat=now, exp=now+300, amr=['pwd', 'mfa'])
         claims.update(changes)
         return jwt.encode(claims, key, algorithm='RS256', headers={'kid': 'test-key'})
     return verifier, token, key
@@ -76,3 +76,46 @@ def test_signature_algorithm_and_key_failures(auth, monkeypatch):
 ])
 def test_invalid_configuration(issuer, audience, url):
     with pytest.raises(RuntimeError): OIDCVerifier(issuer, audience, url)
+
+
+# Report 10.11.2026, gap 1: tokens must show a second factor unless MFA is switched off.
+@pytest.mark.parametrize('changes', [{'amr': None}, {'amr': ['pwd']}, {'amr': 'mfa'}, {'acr': 'mfa'}])
+def test_a_token_without_a_second_factor_is_refused(auth, changes):
+    verifier, token, _ = auth
+    claims = {k: v for k, v in changes.items() if v is not None}
+    raw = token(**claims) if 'amr' in claims else token(amr=None, **claims)
+    with pytest.raises(HTTPException) as error:
+        verifier.verify('Bearer ' + raw)
+    assert error.value.status_code == 401
+    assert 'insufficient_user_authentication' in error.value.headers['WWW-Authenticate']
+
+
+def test_mfa_can_be_shown_by_acr_or_switched_off(auth):
+    verifier, token, _ = auth
+    verifier.mfa_acr = ('urn:example:mfa',)
+    assert verifier.verify('Bearer ' + token(amr=None, acr='urn:example:mfa')).startswith('oidc:')
+    verifier.require_mfa = False
+    assert verifier.verify('Bearer ' + token(amr=None)).startswith('oidc:')
+
+
+def test_the_api_answers_step_up_for_a_single_factor_token(auth):
+    verifier, token, _ = auth
+    r = TestClient(main.app).get('/v1/organizations', headers={'Authorization': 'Bearer ' + token(amr=['pwd'])})
+    assert r.status_code == 401 and 'insufficient_user_authentication' in r.headers['www-authenticate']
+
+
+def test_login_settings_are_public_and_need_https(monkeypatch):
+    from app.auth import login_settings
+    assert login_settings('demo') == {'mode': 'demo'}
+    for name, value in {'VIETBIZ_OIDC_AUTHORIZE_URL': 'https://id.example/authorize',
+                        'VIETBIZ_OIDC_TOKEN_URL': 'https://id.example/token',
+                        'VIETBIZ_OIDC_CLIENT_ID': 'vietbiz-web', 'VIETBIZ_OIDC_MFA_ACR': 'mfa, urn:x:2fa',
+                        'VIETBIZ_OIDC_CLIENT_SECRET': 'must-not-leak'}.items():
+        monkeypatch.setenv(name, value)
+    settings = login_settings('oidc')
+    assert settings['ready'] and settings['mfa_required'] and settings['acr_values'] == 'mfa urn:x:2fa'
+    assert 'must-not-leak' not in str(settings)
+    monkeypatch.setenv('VIETBIZ_OIDC_TOKEN_URL', 'http://id.example/token')
+    assert login_settings('oidc')['ready'] is False
+    monkeypatch.setattr(main, 'AUTH_MODE', 'oidc')
+    assert TestClient(main.app).get('/auth/config').json()['mode'] == 'oidc'

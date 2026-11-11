@@ -27,6 +27,9 @@ const state = {
   cash: null,
   cashTicket: 0,
   cashDoc: null,
+  // OIDC access token (login.js): memory only, never stored in the browser.
+  token: "",
+  logoutUrl: "",
 };
 const retries = new Map();
 const text = (tag, content, className = "") => {
@@ -117,7 +120,11 @@ async function request(path, options = {}) {
     redirect: "error",
     credentials: "omit",
     headers: {
-      ...(state.user ? { "X-User": state.user } : {}),
+      ...(state.token
+        ? { Authorization: "Bearer " + state.token }
+        : state.user
+          ? { "X-User": state.user }
+          : {}),
       ...(options.headers || {}),
     },
   });
@@ -128,6 +135,10 @@ async function request(path, options = {}) {
     try {
       detail = (await r.json()).detail;
     } catch {}
+    // The API asks for a login with a second factor (RFC 9470 step-up).
+    if (r.status === 401 && /insufficient_user_authentication/.test(r.headers.get("WWW-Authenticate") || ""))
+      throw { status: 401, detail, messageKey: "mfaRequired" };
+    if (r.status === 429) throw { status: 429, detail, messageKey: "tooManyRequests" };
     throw { status: r.status, detail };
   }
   // 204 No Content (e.g. a deleted draft) has no body to parse.
@@ -217,10 +228,15 @@ async function connect() {
   resetContext();
   state.api = api;
   state.user = uid;
+  state.token = "";
   state.orgs = [];
   renderOrgOptions();
   const health = await request("/health");
   if (health.auth_mode !== "demo") throw { messageKey: "demoOnly" };
+  await loadCompanies();
+}
+// The signed-in identity's companies; the preferred one (the demo's) is opened.
+async function loadCompanies() {
   state.orgs = await request("/v1/organizations");
   renderOrgOptions();
   if (!state.orgs.length) {
@@ -1272,6 +1288,7 @@ function setTab(which) {
 }
 async function seedDemo() {
   state.api = localApi();
+  state.token = "";
   state.epoch++;
   const health = await request("/health");
   if (health.auth_mode !== "demo") throw { messageKey: "demoOnly" };

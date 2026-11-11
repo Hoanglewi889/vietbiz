@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -1177,6 +1177,72 @@ const path = require("node:path");
         (await page.locator("#profile-org option").count()) === 1 &&
         (await page.locator("#profile-save").isDisabled()),
     );
+    // Report 10.11.2026, gap 1: OIDC login with PKCE against a mocked identity provider.
+    const login = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    login.on("pageerror", (e) => errors.push(e.message));
+    login.on("console", (m) => {
+      if (m.text().includes("Content Security Policy")) cspViolations.push(m.text());
+    });
+    const workspace = process.env.VIETBIZ_UI_URL || "http://127.0.0.1:8000/workspace/";
+    const settings = {
+      mode: "oidc", ready: true, client_id: "vietbiz-web", scope: "openid profile",
+      authorization_endpoint: "https://id.example/authorize", token_endpoint: "https://id.example/token",
+      end_session_endpoint: null, mfa_required: true, acr_values: "mfa",
+    };
+    let authorizeUrl = null, tokenForm = null, bearer = null;
+    await login.route("**/auth/config", (r) => r.fulfill({ json: settings }));
+    await login.route("**/health", (r) => r.fulfill({ json: { status: "ok", mode: "test", auth_mode: "oidc" } }));
+    await login.route("**/v1/organizations", (r) => {
+      bearer = r.request().headers()["authorization"] || null;
+      return r.fulfill({ json: [] });
+    });
+    await login.route("https://id.example/authorize**", (r) => {
+      authorizeUrl = new URL(r.request().url());
+      const back = new URL(authorizeUrl.searchParams.get("redirect_uri"));
+      back.searchParams.set("code", "synthetic-code");
+      back.searchParams.set("state", authorizeUrl.searchParams.get("state"));
+      return r.fulfill({ status: 302, headers: { location: back.toString() } });
+    });
+    await login.route("https://id.example/token", (r) => {
+      tokenForm = new URLSearchParams(r.request().postData());
+      return r.fulfill({
+        json: { access_token: "synthetic-access-token", token_type: "Bearer", expires_in: 300 },
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+    });
+    await login.goto(workspace);
+    await login.locator("#login").click();
+    await login.waitForFunction(() => document.querySelector("#notice").textContent.includes("Đã đăng nhập"));
+    const challenge = await login.evaluate(
+      (verifier) => pkceChallenge(verifier),
+      tokenForm.get("code_verifier"),
+    );
+    check(
+      "Login sends the user to the provider with PKCE (S256), state and the MFA request",
+      authorizeUrl.searchParams.get("code_challenge_method") === "S256" &&
+        authorizeUrl.searchParams.get("code_challenge") === challenge &&
+        authorizeUrl.searchParams.get("client_id") === "vietbiz-web" &&
+        authorizeUrl.searchParams.get("acr_values") === "mfa" &&
+        authorizeUrl.searchParams.get("state").length >= 32,
+    );
+    check(
+      "The code is exchanged without a client secret and the API gets the bearer token",
+      tokenForm.get("grant_type") === "authorization_code" && tokenForm.get("code") === "synthetic-code" &&
+        !tokenForm.has("client_secret") && bearer === "Bearer synthetic-access-token",
+    );
+    check(
+      "After login the code leaves the address bar and the token is not stored in the browser",
+      !login.url().includes("code=") &&
+        (await login.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }).includes("synthetic-access-token"))) === false,
+    );
+    await login.locator("#logout").click();
+    check("Logout forgets the token", (await login.evaluate(() => state.token)) === "" && (await login.locator("#login").isVisible()));
+    // A code that comes back with someone else's state is never exchanged.
+    tokenForm = null;
+    await login.goto(workspace + "?code=forged&state=not-ours");
+    await login.waitForFunction(() => document.querySelector("#notice").textContent.includes("không thành công"));
+    check("A returned code with a foreign state is refused", tokenForm === null && !login.url().includes("code="));
+    await login.close();
     if (cspViolations.length) console.error("CSP", [...new Set(cspViolations)]);
     check("The workspace runs under its Content-Security-Policy without violations", cspViolations.length === 0);
     check("No browser JavaScript errors", errors.length === 0);

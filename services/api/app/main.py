@@ -22,7 +22,7 @@ if DEPLOYMENT_ENV not in {'development', 'test'}:
 AUTH_MODE = os.getenv('VIETBIZ_AUTH_MODE', 'oidc').strip().lower()
 if AUTH_MODE not in {'demo', 'oidc'}:
     raise RuntimeError('Unknown authentication mode')
-from .auth import configured_verifier
+from .auth import configured_verifier, login_settings
 VERIFIER = configured_verifier() if AUTH_MODE == 'oidc' else None
 
 ROOT = Path(os.getenv('VIETBIZ_DATA_DIR', './.vietbiz-data')).resolve()
@@ -74,6 +74,11 @@ class MembershipCreate(BaseModel):
     role:Literal['employee','accountant']
 class ReviewRequest(BaseModel):
     decision:Literal['approve','reject','request_changes']
+
+@app.get('/auth/config')
+def auth_config():
+    """Public login settings for the workspace (no secrets: the web client is public + PKCE)."""
+    return login_settings(AUTH_MODE)
 
 @app.get('/health')
 def health():return {'status':'ok','mode':DEPLOYMENT_ENV,'auth_mode':AUTH_MODE}
