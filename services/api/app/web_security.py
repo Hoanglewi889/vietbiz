@@ -158,13 +158,16 @@ class Limits:
 
 
 class RateLimit(BaseHTTPMiddleware):
-    def __init__(self, app, limits: Limits):
+    def __init__(self, app, limits: Limits, auth_mode: str = 'oidc'):
         super().__init__(app)
         self.limits = limits
+        # Codex review, PR #24: count the credential the active auth mode actually uses, so a
+        # caller cannot get a fresh budget by varying a header that is not checked.
+        self.credential_header = 'x-user' if auth_mode == 'demo' else 'authorization'
 
     async def dispatch(self, request, call_next):
         client = request.client.host if request.client else 'unknown'
-        credential = request.headers.get('authorization') or request.headers.get('x-user') or ''
+        credential = request.headers.get(self.credential_header) or ''
         # Only a digest of the credential is kept, never the token itself.
         identity = hashlib.sha256(credential.encode()).hexdigest()[:24] if credential else None
         wait = self.limits.check(client, request.method, request.url.path, identity=identity)

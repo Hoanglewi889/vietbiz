@@ -267,3 +267,41 @@ def test_the_middleware_limits_by_credential_without_keeping_it(monkeypatch):
         assert not any('synthetic-alice' in str(key) for key in main.LIMITS.hits)
     finally:
         main.LIMITS.hits.clear()
+
+
+def test_damaged_sealed_headers_do_not_stop_a_rotation(monkeypatch):
+    # Codex review, PR #24: a truncated original is counted as unreadable, not a crash.
+    good = crypto.seal(b'synthetic', 'document:o:d')
+    kid = crypto.sealed_with(good)
+    for broken in (crypto.MAGIC, crypto.MAGIC + bytes([5]) + b'k', crypto.MAGIC + bytes([len(kid)]) + kid.encode() + b'short',
+                   crypto.LEGACY + b'tiny'):
+        with pytest.raises(crypto.InvalidTag):
+            crypto.unseal(broken, 'document:o:d')
+    assert crypto.needs_reseal(crypto.MAGIC) and crypto.needs_reseal(crypto.MAGIC + bytes([5]) + b'k')
+    owner = user('Damaged owner')
+    org = c.post('/v1/organizations', json={'name': 'Damaged'}, headers=h(owner)).json()['id']
+    broken_doc, fine_doc = upload(org, owner), upload(org, owner, PDF + b' fine')
+    stored(broken_doc).write_bytes(crypto.MAGIC)
+    try:
+        _keys(monkeypatch, crypto.base64.urlsafe_b64encode(b'\x01' * 32).decode(), 'k9',
+              'k1:' + crypto.base64.urlsafe_b64encode(crypto.keyring()[1][crypto.keyring()[0]]).decode())
+        result = crypto.reseal()
+        assert result['unreadable'] >= 1 and crypto.sealed_with(stored(fine_doc).read_bytes()) == 'k9'
+        assert c.get(f'/v1/organizations/{org}/documents/{broken_doc}/original', headers=h(owner)).status_code == 500
+    finally:
+        monkeypatch.undo()
+        crypto.reset_keys()
+
+
+def test_the_budget_follows_the_credential_the_auth_mode_checks(monkeypatch):
+    # Codex review, PR #24: in demo mode only X-User identifies the caller; a changing
+    # Authorization header must not buy a fresh budget.
+    monkeypatch.setattr(main.LIMITS, 'per_user', 2)
+    main.LIMITS.hits.clear()
+    try:
+        client = TestClient(main.app)
+        codes = [client.get('/health', headers={'X-User': 'synthetic-carol', 'Authorization': f'Bearer x{i}'}).status_code
+                 for i in range(3)]
+        assert codes == [200, 200, 429]
+    finally:
+        main.LIMITS.hits.clear()

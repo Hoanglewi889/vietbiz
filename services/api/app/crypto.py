@@ -38,6 +38,8 @@ MAGIC = b'VBX2'
 LEGACY = b'VBX1'  # first format, no key id
 NONCE = 12
 KEY_ID = re.compile(r'^[A-Za-z0-9._-]{1,32}$')
+MALFORMED = '?'  # sealed_with() for a damaged header; never a valid key id
+TAG = 16  # AES-GCM tag length
 
 
 class UnknownKey(InvalidTag):
@@ -138,8 +140,12 @@ def sealed_with(blob: bytes) -> str | None:
     if blob.startswith(LEGACY):
         return ''
     if blob.startswith(MAGIC):
+        # Codex review, PR #24: a damaged header must not raise here; it names no usable key.
+        if len(blob) <= len(MAGIC):
+            return MALFORMED
         n = blob[len(MAGIC)]
-        return blob[len(MAGIC) + 1:len(MAGIC) + 1 + n].decode('ascii', 'replace')
+        kid = blob[len(MAGIC) + 1:len(MAGIC) + 1 + n].decode('ascii', 'replace')
+        return kid if len(kid) == n and KEY_ID.match(kid) else MALFORMED
     return None
 
 
@@ -149,6 +155,8 @@ def unseal(blob: bytes, context: str) -> bytes:
     kid, keys = keyring()
     if blob.startswith(LEGACY):
         head = len(LEGACY)
+        if len(blob) < head + NONCE + TAG:
+            raise InvalidTag()
         for key in keys.values():
             try:
                 return AESGCM(key).decrypt(blob[head:head + NONCE], blob[head + NONCE:], context.encode())
@@ -164,6 +172,8 @@ def unseal(blob: bytes, context: str) -> bytes:
     if not blob.startswith(header):
         raise InvalidTag()
     rest = blob[len(header):]
+    if len(rest) < NONCE + TAG:
+        raise InvalidTag()
     return AESGCM(keys[used]).decrypt(rest[:NONCE], rest[NONCE:], header + context.encode())
 
 
