@@ -88,6 +88,7 @@ SENSITIVE = [
     ('POST', re.compile(r'^/v1/organizations/[^/]+/documents$')),
     ('POST', re.compile(r'^/v1/organizations/[^/]+/bank/imports$')),
     ('POST', re.compile(r'^/v1/organizations$')),
+    ('GET', re.compile(r'^/v1/organizations/[^/]+/export$')),
 ]
 
 

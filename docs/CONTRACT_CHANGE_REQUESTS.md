@@ -467,3 +467,15 @@ Counts only; no document data leaves its company. No schema change.
   digest is kept).
 - CSP `style-src 'self'` (no `'unsafe-inline'`); UI elements' style attributes moved to their
   stylesheets.
+
+## CR-18 · Company data export (GDPR art. 20, hand-over) and GDPR drafts
+
+- Requested by: the owner ("tiếp tục công việc" after the report's GDPR plan), 2026-11-11 ·
+  Implemented in: `claude/data-export` · Status: proposed in PR · Depends on: #24.
+- `GET /v1/organizations/{org}/export` (owner only; sensitive rate limit; audited
+  `organization.exported`) → ZIP: `README.txt`, `data/<table>.json` for every company table
+  without internal fields (idempotency keys, request hashes, server paths, dedupe keys),
+  `originals/documents|statements/…` decrypted. Accountant-only task notes are left out.
+- Web: "Tải toàn bộ dữ liệu (ZIP)" for the owner (`data-export.js`).
+- `docs/legal/GDPR_DRAFTS.md`: roles, record of processing, retention proposal, rights,
+  DPA clauses, short privacy notice VI/CS — drafts for a Czech lawyer.
