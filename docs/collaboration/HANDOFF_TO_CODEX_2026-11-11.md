@@ -99,11 +99,21 @@ drafted text.
 - Tests: the mailto URL is built and encoded correctly (CS diacritics), the lock and the
   back action work, reduced motion, 390 px.
 
-### Task 4 — from the overall report, if time remains
+### Update 2026-11-11 01:40 — security work moved ahead of Tasks 2–3
 
-- Run `@codex security review` on the chain before the owner merges.
-- Security headers middleware (CSP, `X-Frame-Options`, `Referrer-Policy`) with tests; keep
-  the dev/test-only demo gate untouched.
+The owner asked to focus on the five security gaps of the report. Claude did them in
+**PR #21 `claude/security-hardening`** (CR-15, `docs/SECURITY_HARDENING.md`): OIDC + PKCE
+login with MFA required on tokens, AES-256-GCM sealing of originals, rate limits, security
+headers; `@codex security review` is requested there. Please review #21 (security findings
+first) before Tasks 2–3, and stack new branches on `claude/security-hardening`.
+
+Postponed by the owner ("để sau"): prompt #084 (voice dots) as a voice assistant that
+calls tools/agents — needs decision A (Claude API) and a decision on browser speech
+recognition (audio goes to the browser vendor). Do not start it.
+
+### Task 4 — from the overall report (done in #21 except the items below)
+
+- Answer the security review on #21; keep the dev/test-only demo gate untouched.
 - Do not start: real e-mail sending, Claude API/OCR, payment gateway, datová schránka with
   real credentials, Seznam news (decisions A, C, E, F, G).
 

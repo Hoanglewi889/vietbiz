@@ -1,0 +1,224 @@
+[요소] 목소리에 춤추는 점 로더 (084, 로딩·진행)
+[요소 설명] 마이크 버튼을 누르고 있는 동안 다섯 점이 목소리 크기에 맞춰 위아래로 늘어납니다. 손을 떼면 점들이 차례로 오르내리는 물결로 바뀌며 생각하는 중을 보여 주고, 이어 받아 적은 문장이 한 글자씩 나타납니다.
+[조작] 마이크 버튼을 길게 누르고 있다가 떼 보세요. 키보드는 버튼에서 Space를 누르고 있다가 뗍니다
+
+아래 UI 요소를 제 프로젝트에 적용해 주세요.
+
+[먼저 확인할 것]
+1. 프로젝트의 프레임워크(React, Next, Vue, Svelte, 순수 HTML 등), 스타일 방식(CSS 모듈, Tailwind, 전역 CSS), 기존 테마 방식(data-theme, dark 클래스, CSS 변수)을 찾아 확인하세요.
+2. 삽입 위치의 파일과 기존 요소를 먼저 찾고, 그 요소가 어디서 쓰이는지 보고하세요.
+
+[적용 방법]
+3. 삽입 위치에 새 컴포넌트로 추가하세요. 교체 대상이 있으면 그 요소를 아래 요소로 바꾸세요.
+4. 기존 데이터, props, 이벤트 핸들러, 폼 값, 접근성 속성(라벨, aria, 키보드 조작)은 그대로 유지하세요.
+5. 아래 코드의 구조, 형태, 모션 값(시간, 곡선, 지연)을 기준으로 옮기세요. 프레임워크에 맞게 컴포넌트와 상태로 바꾸되, 디자인을 새로 추측해 바꾸지 마세요.
+6. 색은 아래 --ux-* 토큰을 프로젝트의 기존 테마 변수에 연결하세요. 라이트와 다크 두 값을 모두 유지하고, 두 테마에서 확인하세요.
+7. 스타일은 이 요소의 클래스(.uNNN) 안에만 두고, 전역 CSS나 전역 스크립트는 바꾸지 마세요. 클래스 이름이 기존 요소와 겹치지 않게 하세요.
+8. 예시 문구와 예시 데이터는 프로젝트의 실제 데이터로 바꾸세요. 갤러리 전용 화면과 시연 코드는 가져오지 마세요. 코드 맨 위의 라이선스 주석 한 줄은 새 컴포넌트 파일 맨 위에 남겨 두세요.
+9. prefers-reduced-motion을 켠 상태에서도 기능과 최종 상태가 그대로 작동하는지 확인하세요.
+
+[완료 보고]
+10. 변경한 파일 목록, 기존 요소와 달라진 동작, 확인한 범위(두 테마, 모바일 너비, 키보드), 확인하지 못한 항목을 알려 주세요.
+
+[삽입 위치] 여기에 페이지나 컴포넌트 이름을 적으세요
+[교체 대상] 기존 요소의 파일 경로나 컴포넌트 이름을 적으세요. 없으면 "없음"
+
+--- 코드 시작 (이 코드 전체가 실제로 동작하는 원본입니다) ---
+<!-- Lucian UX/UI Prompt #084 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#084 -->
+<style>
+/* lucianLabs UI 요소 — 공통 테마 토큰 (라이트 / 다크)
+   라이트 기본값 → 시스템이 다크면 다크 → data-theme으로 명시하면 그 값을 우선합니다.
+   요소 CSS는 --ux-* 토큰만 참조하므로, 프로젝트 테마 변수에 이 값을 매핑하면 됩니다. */
+:root{
+  color-scheme:light;
+  --ux-page:#F4F2EE;
+  --ux-surface:#FFFFFF;
+  --ux-surface-2:#F5F3EF;
+  --ux-surface-3:#EAE7E1;
+  --ux-ink:#16151B;
+  --ux-ink-2:#57535F;
+  --ux-ink-3:#8E8A97;
+  --ux-line:rgba(22,21,27,.09);
+  --ux-line-2:rgba(22,21,27,.17);
+  --ux-accent:#6A57F2;
+  --ux-accent-2:#2F8FE0;
+  --ux-accent-soft:rgba(106,87,242,.12);
+  --ux-accent-ink:#FFFFFF;
+  --ux-mint:#119C72;
+  --ux-warn:#D6731E;
+  --ux-danger:#D93A55;
+  --ux-glass:rgba(255,255,255,.58);
+  --ux-glass-line:rgba(255,255,255,.85);
+  --ux-shadow:rgba(40,30,80,.14);
+  --ux-shadow-strong:rgba(40,30,80,.3);
+  --ux-grad:linear-gradient(120deg,#7B61FF,#3D8BFF 55%,#1FB89A);
+  --ux-ease:cubic-bezier(.2,.8,.2,1);
+  --ux-spring:cubic-bezier(.34,1.45,.64,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ux-page:#07080D;
+    --ux-surface:#13141C;
+    --ux-surface-2:#1A1B25;
+    --ux-surface-3:#252632;
+    --ux-ink:#F4F0E8;
+    --ux-ink-2:rgba(244,240,232,.68);
+    --ux-ink-3:rgba(244,240,232,.42);
+    --ux-line:rgba(255,255,255,.08);
+    --ux-line-2:rgba(255,255,255,.16);
+    --ux-accent:#B7A4FF;
+    --ux-accent-2:#7DB4FF;
+    --ux-accent-soft:rgba(183,164,255,.15);
+    --ux-accent-ink:#0B0C12;
+    --ux-mint:#7EE8C0;
+    --ux-warn:#FFB26B;
+    --ux-danger:#FF7D8C;
+    --ux-glass:rgba(255,255,255,.07);
+    --ux-glass-line:rgba(255,255,255,.18);
+    --ux-shadow:rgba(0,0,0,.45);
+    --ux-shadow-strong:rgba(0,0,0,.72);
+    --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ux-page:#07080D;
+  --ux-surface:#13141C;
+  --ux-surface-2:#1A1B25;
+  --ux-surface-3:#252632;
+  --ux-ink:#F4F0E8;
+  --ux-ink-2:rgba(244,240,232,.68);
+  --ux-ink-3:rgba(244,240,232,.42);
+  --ux-line:rgba(255,255,255,.08);
+  --ux-line-2:rgba(255,255,255,.16);
+  --ux-accent:#B7A4FF;
+  --ux-accent-2:#7DB4FF;
+  --ux-accent-soft:rgba(183,164,255,.15);
+  --ux-accent-ink:#0B0C12;
+  --ux-mint:#7EE8C0;
+  --ux-warn:#FFB26B;
+  --ux-danger:#FF7D8C;
+  --ux-glass:rgba(255,255,255,.07);
+  --ux-glass-line:rgba(255,255,255,.18);
+  --ux-shadow:rgba(0,0,0,.45);
+  --ux-shadow-strong:rgba(0,0,0,.72);
+  --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+}
+/* 요소 공통 베이스 — 루트에 .ux 클래스를 붙입니다 */
+.ux,.ux *,.ux *::before,.ux *::after{box-sizing:border-box}
+.ux{
+  font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+  color:var(--ux-ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em;
+  -webkit-tap-highlight-color:transparent;
+  word-break:keep-all;overflow-wrap:break-word;
+}
+/* :where()로 명시도를 0으로 둬서, 요소 클래스가 버튼·입력의 색과 글꼴을 덮어쓸 수 있게 합니다 */
+:where(.ux) :is(button,input,textarea,select){font:inherit;color:inherit}
+:where(.ux) button{cursor:pointer}
+.ux :focus-visible{outline:2px solid var(--ux-accent);outline-offset:3px}
+.ux [hidden]{display:none!important}
+/* 모션 줄이기: 전환은 즉시 끝나고, 무한 반복은 한 번으로 줄여 최종 상태가 보이게 합니다 */
+@media (prefers-reduced-motion:reduce){
+  .ux,.ux *,.ux *::before,.ux *::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;
+  }
+}
+</style>
+
+<style>
+.u084{position:relative;width:340px;height:380px;display:flex;flex-direction:column;align-items:center;padding:28px 24px 26px;border-radius:30px;background:var(--ux-surface);box-shadow:0 0 0 1px var(--ux-line),0 30px 60px -36px var(--ux-shadow-strong);overflow:hidden;text-align:center}
+.u084-lab{font-size:12.5px;font-weight:800;letter-spacing:.06em;color:var(--ux-ink-3);transition:color .3s}
+.u084[data-s="listen"] .u084-lab{color:var(--ux-danger)}
+.u084-dots{display:flex;align-items:center;justify-content:center;gap:12px;height:100px;margin-top:14px}
+.u084-dots i{width:22px;height:calc(22px + var(--h,0) * 70px);border-radius:999px;background:linear-gradient(180deg,var(--c1),var(--c2));transition:height .12s linear}
+.u084-dots i:nth-child(1){--c1:#22C3A6;--c2:#0EA5E9}
+.u084-dots i:nth-child(2){--c1:#3D8BFF;--c2:#7B61FF}
+.u084-dots i:nth-child(3){--c1:#7B61FF;--c2:#B04FD0}
+.u084-dots i:nth-child(4){--c1:#FF6B8B;--c2:#E5484D}
+.u084-dots i:nth-child(5){--c1:#FFB547;--c2:#FF7A45}
+.u084[data-s="idle"] .u084-dots i{animation:u084-breath 2.4s ease-in-out infinite;animation-delay:calc(var(--i) * .12s)}
+@keyframes u084-breath{50%{transform:scale(1.15);opacity:.75}}
+.u084[data-s="think"] .u084-dots i{height:22px;animation:u084-wave 1s cubic-bezier(.45,0,.55,1) infinite;animation-delay:calc(var(--i) * .1s)}
+@keyframes u084-wave{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-18px)}}
+.u084-say{min-height:48px;margin:16px 0 0;font-size:17px;line-height:1.45;font-weight:750;letter-spacing:-.03em}
+.u084-say .c{display:inline-block;width:2px;height:1em;margin-left:2px;vertical-align:-2px;background:var(--ux-accent);animation:u084-caret 1s steps(1) infinite}
+@keyframes u084-caret{50%{opacity:0}}
+.u084-say.dim{color:var(--ux-ink-3);font-weight:650;font-size:14.5px}
+.u084-mic{position:relative;width:76px;height:76px;margin-top:auto;border:0;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--ux-ink);color:var(--ux-page);touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .35s var(--ux-spring),background-color .3s}
+.u084-mic svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.u084-mic::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--ux-danger);opacity:0;transform:scale(calc(1 + var(--lv,0) * .35));transition:opacity .2s}
+.u084[data-s="listen"] .u084-mic{background:var(--ux-danger);color:#fff;transform:scale(1.08)}
+.u084[data-s="listen"] .u084-mic::before{opacity:.5}
+.u084-mic:focus-visible{outline:2px solid var(--ux-accent);outline-offset:6px}
+.u084-hint{margin-top:18px;font-size:12px;font-weight:650;color:var(--ux-ink-3)}
+</style>
+<div class="ux u084" data-s="idle">
+  <span class="u084-lab" aria-live="polite">대기 중</span>
+  <div class="u084-dots" aria-hidden="true"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i></div>
+  <p class="u084-say dim" aria-live="polite">누르고 있는 동안 듣고 있어요</p>
+  <button class="u084-mic" type="button" aria-label="누르고 있는 동안 말하기"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="10" y="4" width="8" height="13" rx="4"/><path d="M6.5 13.5a7.5 7.5 0 0 0 15 0M14 21v3"/></svg></button>
+  <span class="u084-hint" aria-hidden="true">길게 눌러 말하기</span>
+</div>
+
+<script>
+(function () {
+  var root = document.currentScript.previousElementSibling;
+  var dots = root.querySelectorAll('.u084-dots i'), mic = root.querySelector('.u084-mic'), say = root.querySelector('.u084-say'), lab = root.querySelector('.u084-lab');
+  var rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var ANS = ['내일 오전 10시에 디자인 리뷰 일정 추가해 줘', '이번 주 토요일 제주 날씨 알려 줘', '한도윤에게 시안 보냈다고 메시지 보내 줘'];
+  var raf = 0, t0 = 0, ts = [], n = 0, held = false;
+  function set(s, label) { root.setAttribute('data-s', s); lab.textContent = label; }
+  // 듣는 동안에는 여러 사인파를 섞은 가짜 음량으로 점의 높이를 바꿉니다
+  function listen(now) {
+    if (!root.isConnected || root.getAttribute('data-s') !== 'listen') return;
+    var t = (now - t0) / 1000, lv = 0;
+    dots.forEach(function (d, i) {
+      var v = Math.abs(Math.sin(t * 7 + i * 1.3) * 0.6 + Math.sin(t * 13 + i * 2.1) * 0.3 + Math.sin(t * 3.1) * 0.2);
+      v = rm ? 0.4 : Math.min(1, v * (0.7 + 0.3 * Math.sin(t * 2 + i)));
+      d.style.setProperty('--h', v.toFixed(3)); lv += v;
+    });
+    mic.style.setProperty('--lv', (lv / 5).toFixed(3));
+    raf = requestAnimationFrame(listen);
+  }
+  function down() {
+    if (held) return;
+    held = true;
+    ts.forEach(clearTimeout); ts = [];
+    set('listen', '듣는 중');
+    say.className = 'u084-say dim'; say.textContent = '말씀하세요…';
+    t0 = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(listen);
+  }
+  function up() {
+    if (!held) return;
+    held = false;
+    cancelAnimationFrame(raf);
+    dots.forEach(function (d) { d.style.setProperty('--h', 0); });
+    mic.style.setProperty('--lv', 0);
+    set('think', '생각하는 중');
+    say.textContent = '';
+    var txt = ANS[n++ % ANS.length];
+    ts.push(setTimeout(function () {
+      if (!root.isConnected) return;
+      set('idle', '받아 적었어요');
+      say.className = 'u084-say';
+      // 받아 적은 문장은 한 글자씩 흘러나옵니다
+      var k = 0;
+      (function type() {
+        if (!root.isConnected) return;
+        say.innerHTML = '';
+        say.appendChild(document.createTextNode(txt.slice(0, k)));
+        if (k < txt.length) { var c = document.createElement('span'); c.className = 'c'; say.appendChild(c); k++; ts.push(setTimeout(type, rm ? 0 : 38)); }
+      })();
+    }, rm ? 300 : 1600));
+  }
+  mic.addEventListener('pointerdown', function (e) { if (e.button !== 0) return; mic.setPointerCapture(e.pointerId); down(); });
+  mic.addEventListener('pointerup', up);
+  mic.addEventListener('pointercancel', up);
+  mic.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); down(); } });
+  mic.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); up(); } });
+  mic.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+</script>
+--- 코드 끝 ---
