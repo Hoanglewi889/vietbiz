@@ -43,7 +43,8 @@ function deadlineRow(item) {
     amount.append(
       text("span", fill(t(item.amount.kind === "fixed" ? "fixedAmount" : "minimumAmount"),
         { amount: money(item.amount.value, item.amount.currency) })),
-      text("small", " · " + t("checkOfficial") + " "),
+      // "official": read on the authority's own site; otherwise a secondary source to check.
+      text("small", " · " + t(item.amount.status === "official" ? "officialFigure" : "checkOfficial") + " "),
     );
     const link = text("a", t("source"));
     link.href = item.amount.source;

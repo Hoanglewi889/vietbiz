@@ -479,3 +479,20 @@ Counts only; no document data leaves its company. No schema change.
 - Web: "Tải toàn bộ dữ liệu (ZIP)" for the owner (`data-export.js`).
 - `docs/legal/GDPR_DRAFTS.md`: roles, record of processing, retention proposal, rights,
   DPA clauses, short privacy notice VI/CS — drafts for a Czech lawyer.
+
+## CR-19 · Legal amounts: July 2026 cut of the minimum social advance; 2027 status
+
+- Requested by: the owner ("tiếp tục" after the report's legal table), 2026-11-11 ·
+  Implemented in: `claude/legal-amounts` · Status: proposed in PR · Depends on: #25.
+- From 1 July 2026 the minimum assessment base for the main activity is 35 % (was 40 %) of
+  the average wage: minimum social advance 5 005 Kč (was 5 720), source ČSSZ Zpravodaj
+  June 2026 → status `official`. Flat-tax band 1 follows: 9 162 Kč from July 2026 (was 9 984;
+  secondary source, `reported`). Bands 2–3, health 3 306 Kč and secondary activity 1 574 Kč
+  are unchanged.
+- `filing_calendar.AMOUNTS[year]['from_month']` holds changes during a year; an amount now
+  depends on the period month. `amount.status` is `official` or `reported`; the web shows
+  "số của cơ quan / údaj úřadu" for official figures and keeps "kiểm tra số chính thức" for the
+  rest.
+- 2027 (social 5 281, secondary 1 660, health 3 488, flat tax 9 662 / 16 745 / 27 139) stays
+  `reported`: approved by government decree (21.9.2026) per secondary sources; to switch to
+  `official` once ČSSZ/VZP publish the figures for 2027.

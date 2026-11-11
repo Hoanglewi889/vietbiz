@@ -64,10 +64,13 @@ def test_osvc_advances_carry_the_yearly_minimum_and_no_guess_for_unknown_years()
     items = fc.deadlines(profile(), date(2026, 12, 1), date(2028, 1, 31))
     social = {i['period']: i for i in items if i['code'] == 'social_advance'}
     health = {i['period']: i for i in items if i['code'] == 'health_advance'}
-    assert social['2026-12']['due_date'] == '2026-12-31' and social['2026-12']['amount']['value'] == '5720'
+    # From July 2026 the minimum social advance is 5 005 Kč (ČSSZ, official).
+    assert social['2026-12']['due_date'] == '2026-12-31' and social['2026-12']['amount']['value'] == '5005'
+    assert social['2026-12']['amount']['status'] == 'official'
+    assert 'cssz.gov.cz' in social['2026-12']['amount']['source']
     assert social['2027-01']['amount']['value'] == '5281' and health['2027-01']['amount']['value'] == '3488'
     assert health['2026-12']['due_date'] == '2027-01-08'
-    assert all(i['amount']['status'] == 'reported' and i['amount']['source'].startswith('https://')
+    assert all(i['amount']['status'] in ('official', 'reported') and i['amount']['source'].startswith('https://')
                for i in social.values() if i['amount'])
     assert social['2028-01']['amount'] is None
     secondary = fc.deadlines(profile(osvc_activity='secondary'), date(2027, 1, 1), date(2027, 1, 31))
@@ -81,6 +84,7 @@ def test_flat_tax_replaces_advances_and_annual_return():
     assert due(items, 'flat_tax_notice') == ['2026-01-12', '2027-01-11']
     flat = {i['period']: i for i in items if i['code'] == 'flat_tax'}
     assert flat['2026-01']['due_date'] == '2026-01-20' and flat['2026-01']['amount']['value'] == '9984'
+    assert flat['2026-06']['amount']['value'] == '9984' and flat['2026-07']['amount']['value'] == '9162'
     assert flat['2027-01']['amount']['value'] == '9662'
     assert flat['2026-06']['due_date'] == '2026-06-22'  # 20 June 2026 is a Saturday
     assert not any(i['code'] in ('social_advance', 'health_advance', 'income_tax_return', 'social_overview')
@@ -145,3 +149,14 @@ def test_portfolio_calendar_lists_every_company_and_flags_missing_profiles(monke
     assert rows[bistro]['profile_missing'] and rows[bistro]['next_deadline'] is None
     assert not rows[shop]['profile_missing']
     assert rows[shop]['next_deadline'] == {'code': 'payroll', 'due_date': '2026-11-20', 'period': '2026-10'}
+
+
+def test_the_july_2026_cut_applies_from_its_month_on():
+    items = fc.deadlines(profile(), date(2026, 6, 1), date(2026, 7, 31))
+    social = {i['period']: i['amount'] for i in items if i['code'] == 'social_advance'}
+    assert social['2026-06']['value'] == '5720' and social['2026-06']['status'] == 'reported'
+    assert social['2026-07']['value'] == '5005' and social['2026-07']['status'] == 'official'
+    secondary = fc.deadlines(profile(osvc_activity='secondary'), date(2026, 7, 1), date(2026, 7, 31))
+    assert next(i for i in secondary if i['code'] == 'social_advance')['amount']['value'] == '1574'
+    band2 = fc.deadlines(profile(flat_tax_band=2), date(2026, 7, 1), date(2026, 7, 31))
+    assert next(i for i in band2 if i['code'] == 'flat_tax')['amount']['value'] == '16745'
