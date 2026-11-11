@@ -27,7 +27,8 @@ You are taking over VietBiz work from Claude. Read `CLAUDE.md`, `AGENTS.md`,
 
 ```
 cd services/api && python -m alembic upgrade head && python -m pytest -q
-# PostgreSQL 16: VIETBIZ_DATABASE_URL=postgresql+psycopg://…/vietbiz_test, alembic upgrade head, pytest -q
+# PostgreSQL 16: VIETBIZ_TEST_DATABASE_URL=postgresql+psycopg://…/vietbiz_test python -m pytest -q
+# (conftest reads VIETBIZ_TEST_DATABASE_URL; VIETBIZ_DATABASE_URL alone is overridden with SQLite)
 npm run test:ui     # from repo root; restore quality-evidence/sprint10-ui.json afterwards
 ```
 

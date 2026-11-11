@@ -48,8 +48,14 @@ All three tests fail on the code before the fix (3 failed) and pass after it.
 | Item | Why it matters | Proposal |
 | --- | --- | --- |
 | Personal data in database columns (names, account numbers in bank movements and invoices) is not encrypted column by column | A stolen database copy shows them; only the original files are sealed | Encrypted disk + encrypted backups at the host (standard for this size); column encryption only if a customer requires it |
-| Rate limits per process and per direct peer | Behind a proxy all users share one address | Limits at the reverse proxy; per-user limits in the API later |
-| Key rotation for sealed originals | A leaked key cannot be replaced without re-sealing | Add a key id to the header and a re-seal command |
+| Rate limits per process | Several workers do not share counters | Limits at the reverse proxy (per-caller limits added in CR-17) |
 | Real identity provider and real second factor never tested | The MFA check is only tested with synthetic tokens | Choose the provider; one end-to-end test before go-live |
 | Retention and deletion of personal data (GDPR) | No deletion path yet | Owner decision on retention per data type (see the overall report) |
-| CSP allows inline *styles* | Low risk (no inline script) | Move UI-element style attributes to classes later |
+
+## Follow-up (CR-17, `claude/security-hardening-2`)
+
+- Key rotation: `VBX2` header with an authenticated key id, retired keys for reading,
+  `python -m app.crypto reseal`.
+- Per-caller rate limits (digest of the credential), so users behind one proxy do not share a
+  budget.
+- CSP without `'unsafe-inline'` styles.

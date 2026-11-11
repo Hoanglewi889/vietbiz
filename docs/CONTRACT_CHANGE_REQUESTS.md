@@ -455,3 +455,15 @@ Counts only; no document data leaves its company. No schema change.
   "Hoàn thiện hồ sơ khách hàng" (CS equivalents). A template creates the task through
   `POST …/tasks` with an Idempotency-Key, then opens it. Filtered-empty lists keep the
   plain message. Files: `empty-folder.css/js`, one hook in `renderTasks`.
+
+## CR-17 · Security follow-up: key rotation, per-caller limits, CSP without inline styles
+
+- Requested by: the owner ("tập trung vào phần cốt lõi", "tiếp tục công việc"), 2026-11-11 ·
+  Implemented in: `claude/security-hardening-2` · Status: proposed in PR · Depends on: #23.
+- Sealed originals: new header `VBX2` + key id (authenticated with the data); originals in the
+  first format `VBX1` still open. `VIETBIZ_DATA_KEY_ID`, `VIETBIZ_DATA_KEYS_RETIRED`;
+  `python -m app.crypto reseal`. No schema change.
+- Rate limits also per caller credential (`VIETBIZ_RATE_LIMIT_PER_USER_PER_MINUTE`, only a
+  digest is kept).
+- CSP `style-src 'self'` (no `'unsafe-inline'`); UI elements' style attributes moved to their
+  stylesheets.

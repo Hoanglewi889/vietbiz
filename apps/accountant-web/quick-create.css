@@ -233,3 +233,30 @@
     display: none !important;
   }
 }
+
+/* Each action's place in the fan and its colour. Kept here, not in style attributes, so the
+   workspace runs under a CSP without 'unsafe-inline' styles (security review 11.11.2026). */
+.u011-it[data-action="upload"] {
+  --i: 0;
+  --x: -108px;
+  --y: -30px;
+  --c: linear-gradient(140deg,#FF8A65,#FF5A6E);
+}
+.u011-it[data-action="invoice"] {
+  --i: 1;
+  --x: -56px;
+  --y: -98px;
+  --c: linear-gradient(140deg,#5B8CFF,#3D6BFF);
+}
+.u011-it[data-action="statement"] {
+  --i: 2;
+  --x: 56px;
+  --y: -98px;
+  --c: linear-gradient(140deg,#22C3A6,#119C72);
+}
+.u011-it[data-action="shift"] {
+  --i: 3;
+  --x: 108px;
+  --y: -30px;
+  --c: linear-gradient(140deg,#FFC24B,#F59E0B);
+}

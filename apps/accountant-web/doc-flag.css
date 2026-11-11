@@ -192,3 +192,37 @@
   color: var(--ux-ink-3);
   font-weight: 600;
 }
+
+/* Burst particles: angle and colour (moved out of style attributes for the CSP). */
+.u012-p1 {
+  --a: 0deg;
+  --c: #FFC14D;
+}
+.u012-p2 {
+  --a: 45deg;
+  --c: #FF6B6B;
+}
+.u012-p3 {
+  --a: 90deg;
+  --c: #8B6CFF;
+}
+.u012-p4 {
+  --a: 135deg;
+  --c: #22C3A6;
+}
+.u012-p5 {
+  --a: 180deg;
+  --c: #FFC14D;
+}
+.u012-p6 {
+  --a: 225deg;
+  --c: #FF6B6B;
+}
+.u012-p7 {
+  --a: 270deg;
+  --c: #3D8BFF;
+}
+.u012-p8 {
+  --a: 315deg;
+  --c: #FF9F5A;
+}

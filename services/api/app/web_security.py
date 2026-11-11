@@ -5,14 +5,15 @@ Headers: a Content-Security-Policy that only allows the workspace's own scripts 
 `nosniff`, no referrer, and a Permissions-Policy that turns off camera, microphone and
 location. HSTS is sent on HTTPS requests only.
 
-Rate limits (per client address, in memory, one process): a general budget per minute, a
-smaller one for expensive or sensitive routes (uploads, statement imports, invitations, demo
+Rate limits (per client address and per caller credential, in memory, one process): a general
+budget per minute per address and per caller, a smaller one for expensive or sensitive routes (uploads, statement imports, invitations, demo
 users), and a lock-out after repeated 401 answers (guessing tokens). Behind a reverse proxy or
 with several workers, enforce the same limits at the proxy as well: this module only sees the
 direct peer, and counters are not shared between processes.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import threading
@@ -51,8 +52,9 @@ def content_security_policy() -> str:
     return '; '.join([
         "default-src 'none'",
         "script-src 'self'",
-        # Inline style attributes carry the UI elements' CSS variables (style="--i:0").
-        "style-src 'self' 'unsafe-inline'",
+        # No inline styles either (security review 11.11.2026): the UI elements' variables live in
+        # their stylesheets; scripts may still set styles through the CSSOM (el.style.x).
+        "style-src 'self'",
         "img-src 'self' data: blob:",
         "frame-src blob:",
         "font-src 'self'",
@@ -99,8 +101,9 @@ def _int(name: str, default: int) -> int:
 class Limits:
     """Sliding one-minute windows per client; 0 turns a limit off."""
 
-    def __init__(self, general: int, sensitive: int, failures: int, lockout_seconds: int = 300):
+    def __init__(self, general: int, sensitive: int, failures: int, lockout_seconds: int = 300, per_user: int = 0):
         self.general, self.sensitive, self.failures, self.lockout = general, sensitive, failures, lockout_seconds
+        self.per_user = per_user
         self.hits: dict[tuple, deque] = {}
         self.blocked: dict[str, float] = {}
         self.lock = threading.Lock()
@@ -111,7 +114,8 @@ class Limits:
         testing = os.getenv('VIETBIZ_ENV', 'development').strip().lower() == 'test'
         return cls(_int('VIETBIZ_RATE_LIMIT_PER_MINUTE', 0 if testing else 600),
                    _int('VIETBIZ_RATE_LIMIT_SENSITIVE_PER_MINUTE', 0 if testing else 30),
-                   _int('VIETBIZ_AUTH_FAILURES_PER_5_MINUTES', 0 if testing else 20))
+                   _int('VIETBIZ_AUTH_FAILURES_PER_5_MINUTES', 0 if testing else 20),
+                   per_user=_int('VIETBIZ_RATE_LIMIT_PER_USER_PER_MINUTE', 0 if testing else 300))
 
     def _take(self, key: tuple, limit: int, window: float, now: float) -> float:
         """Record a hit; return seconds to wait when the limit is already used up, else 0."""
@@ -125,13 +129,18 @@ class Limits:
         q.append(now)
         return 0
 
-    def check(self, client: str, method: str, path: str, now: float | None = None) -> float:
+    def check(self, client: str, method: str, path: str, now: float | None = None,
+              identity: str | None = None) -> float:
         now = time.monotonic() if now is None else now
         with self.lock:
             until = self.blocked.get(client, 0)
             if until > now:
                 return until - now
             wait = self._take(('all', client), self.general, 60, now)
+            # Several users behind one proxy share an address; one caller cannot use up more
+            # than its own budget either way.
+            if not wait and identity:
+                wait = self._take(('user', identity), self.per_user, 60, now)
             if not wait and any(m == method and p.match(path) for m, p in SENSITIVE):
                 wait = self._take(('sensitive', client), self.sensitive, 60, now)
             if len(self.hits) > 50_000:  # forget idle clients so memory stays bounded
@@ -155,7 +164,10 @@ class RateLimit(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         client = request.client.host if request.client else 'unknown'
-        wait = self.limits.check(client, request.method, request.url.path)
+        credential = request.headers.get('authorization') or request.headers.get('x-user') or ''
+        # Only a digest of the credential is kept, never the token itself.
+        identity = hashlib.sha256(credential.encode()).hexdigest()[:24] if credential else None
+        wait = self.limits.check(client, request.method, request.url.path, identity=identity)
         if wait:
             return JSONResponse({'detail': 'Too many requests'}, status_code=429,
                                 headers={'Retry-After': str(max(1, int(wait + 0.999)))})

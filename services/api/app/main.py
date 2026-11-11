@@ -41,8 +41,8 @@ LIMITS = Limits.from_env()
 app.add_middleware(RateLimit, limits=LIMITS)
 app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
 app.add_middleware(SecurityHeaders)
-from .crypto import data_key, document_context, seal, unseal
-data_key()  # fail at start-up, not on the first upload, when the key is missing or malformed
+from .crypto import document_context, keyring, seal, unseal
+keyring()  # fail at start-up, not on the first upload, when the key is missing or malformed
 from .database import connection as conn, require_schema
 require_schema()
 

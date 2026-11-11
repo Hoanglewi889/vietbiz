@@ -22,7 +22,10 @@ other environment. Lifting it is a separate decision for the owner.
 | `VIETBIZ_OIDC_CLIENT_ID`, `VIETBIZ_OIDC_SCOPE` | Public web client id; scopes | —, `openid` |
 | `VIETBIZ_OIDC_REQUIRE_MFA` | Refuse tokens without a second factor | on |
 | `VIETBIZ_OIDC_MFA_ACR` | `acr` values that count as MFA, comma-separated; also sent as `acr_values` | — |
-| `VIETBIZ_RATE_LIMIT_PER_MINUTE` | Requests per client per minute (0 = off) | 600 (test env: off) |
+| `VIETBIZ_DATA_KEY_ID` | Id written into each sealed original (1-32 of `A-Za-z0-9._-`) | `k1` |
+| `VIETBIZ_DATA_KEYS_RETIRED` | Old keys that may still open originals during a rotation: `id:base64,id:base64` | — |
+| `VIETBIZ_RATE_LIMIT_PER_MINUTE` | Requests per client address per minute (0 = off) | 600 (test env: off) |
+| `VIETBIZ_RATE_LIMIT_PER_USER_PER_MINUTE` | Requests per caller credential per minute (a digest of the token / `X-User` is kept, never the value) | 300 (test env: off) |
 | `VIETBIZ_RATE_LIMIT_SENSITIVE_PER_MINUTE` | Uploads, statement imports, invitations, members, new companies, demo users | 30 (test env: off) |
 | `VIETBIZ_AUTH_FAILURES_PER_5_MINUTES` | 401 answers before a 5-minute lock-out | 20 (test env: off) |
 
@@ -44,15 +47,19 @@ other environment. Lifting it is a separate decision for the owner.
 - Existing data from before this change: `cd services/api && python -m app.crypto seal-existing`.
 - A sealed file only opens for the record it was written for (company + id as associated data);
   a moved or swapped file answers 500 "cannot be decrypted" instead of another company's data.
-- Key rotation is not implemented yet (a second key id in the header would allow it).
+- Rotation: set the new key and a new `VIETBIZ_DATA_KEY_ID`, move the old key to
+  `VIETBIZ_DATA_KEYS_RETIRED`, restart, run `python -m app.crypto reseal` (it reports
+  `unreadable` originals that no configured key opens and leaves them as they are), then remove
+  the retired key. The key id is authenticated with the data.
 
 ## Known limits
 
-- Rate limits are per process and per direct peer address; with a proxy, the proxy's address is
-  seen. Configure limits at the proxy too.
-- CSP allows `'unsafe-inline'` for styles only (inline style attributes carry the UI elements'
-  CSS variables); scripts are `'self'` only. A local API on `[::1]` is not reachable under the
-  CSP (CSP cannot name an IPv6 literal); use `localhost` or `127.0.0.1`.
+- Rate limits are per process, per direct peer address and per caller credential; with a proxy,
+  the proxy's address is seen, so the per-caller budget is what separates users. Configure
+  limits at the proxy too when there are several workers.
+- CSP has no `'unsafe-inline'` at all (scripts and styles `'self'`); the UI elements' variables
+  live in their stylesheets. A local API on `[::1]` is not reachable under the CSP (CSP cannot
+  name an IPv6 literal); use `localhost` or `127.0.0.1`.
 
 ## Claude's security checklist for this change (gap 5)
 
