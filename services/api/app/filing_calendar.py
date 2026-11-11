@@ -9,9 +9,11 @@ holiday moves to the next working day (§ 33(4) daňový řád). Insurance advan
 their plain statutory day, because they count as paid only when credited and the insurers do
 not publish a shift rule; showing the earlier day is the safe side.
 
-Amounts are minimums reported for that year with their source and a status: 'reported' means
-a published secondary source, to be checked against ČSSZ, the health insurer or Finanční
-správa before paying. Unknown years carry no amount rather than a guess.
+Amounts are minimums for that month with their source and a status: 'official' means read on
+the authority's own site (ČSSZ, the health insurer, Finanční správa); 'reported' means a
+published secondary source, to be checked against the authority before paying. Unknown years
+carry no amount rather than a guess. A change during a year (the July 2026 cut of the minimum
+social advance) applies from its month on.
 """
 from __future__ import annotations
 
@@ -43,7 +45,18 @@ SOURCES = {
 AMOUNTS = {
     2026: {'social_main': '5720', 'social_secondary': '1574', 'health_main': '3306',
            'flat_tax': {1: '9984', 2: '16745', 3: '27139'},
-           'source': 'https://www.pruvodcepodnikanim.cz/clanek/minimalni-zalohy-osvc-2026/'},
+           'source': 'https://www.pruvodcepodnikanim.cz/clanek/minimalni-zalohy-osvc-2026/',
+           # From 1 July 2026 the minimum assessment base for the main activity is 35 % (not 40 %)
+           # of the average wage: the minimum social advance is 5 005 Kč (ČSSZ Zpravodaj, June
+           # 2026). Band 1 of the flat tax follows (100 + 1.15 × 5 005 + 3 306 = 9 162 Kč).
+           'from_month': {7: {'social_main': ('5005', 'official',
+                                              'https://www.cssz.gov.cz/documents/20143/2045988/'
+                                              '26-06%20Zpr@vodaj%20%C4%8CSSZ%20(%C4%8Derven%202026).pdf/'
+                                              '9ea9bf39-2546-f714-28c1-dcbe3ef94f12'),
+                              'flat_tax_1': ('9162', 'reported',
+                                             'https://www.pruvodcepodnikanim.cz/clanek/pausalni-dan-2027-vyse-zaloh-do-kdy-se-prihlasit/')}}},
+    # 2027: the government approved the average wage for 2027 on 21.9.2026 (secondary sources);
+    # stays 'reported' until ČSSZ and VZP publish the 2027 minimums themselves.
     2027: {'social_main': '5281', 'social_secondary': '1660', 'health_main': '3488',
            'flat_tax': {1: '9662', 2: '16745', 3: '27139'},
            'source': 'https://www.podnikatel.cz/clanky/na-kolik-v-roce-2027-vzrostou-zalohy-na-socialni-a-zdravotni-pojisteni-osvc/'},
@@ -91,14 +104,18 @@ def month_end(year: int, month: int) -> date:
     return date(year, month, calendar.monthrange(year, month)[1])
 
 
-def _amount(year, key, band=None):
+def _amount(year, key, band=None, month=1):
     known = AMOUNTS.get(year)
     if not known:
         return None
     value = known['flat_tax'][band] if key == 'flat_tax' else known[key]
+    status, source = 'reported', (known['source'] if key != 'flat_tax' or year != 2027 else SOURCES['flat_tax'])
+    change_key = f'flat_tax_{band}' if key == 'flat_tax' else key
+    for start, changes in sorted(known.get('from_month', {}).items()):
+        if month >= start and change_key in changes:
+            value, status, source = changes[change_key]
     return {'value': value, 'currency': 'CZK', 'kind': 'minimum' if key != 'flat_tax' else 'fixed',
-            'status': 'reported', 'source': known['source'] if key != 'flat_tax' or year != 2027
-            else SOURCES['flat_tax']}
+            'status': status, 'source': source}
 
 
 def _item(code, due, period, office, source, *, statutory=None, conditional=False, amount=None):
@@ -147,15 +164,15 @@ def deadlines(profile: dict, start: date, end: date) -> list[dict]:
         if osvc and band:
             due, statutory = _tax_day(date(y, m, 20))
             out.append(_item('flat_tax', due, label, 'tax_office', SOURCES['flat_tax'], statutory=statutory,
-                             amount=_amount(y, 'flat_tax', band)))
+                             amount=_amount(y, 'flat_tax', band, m)))
         elif osvc:
             main = profile['osvc_activity'] == 'main'
             out.append(_item('social_advance', month_end(y, m), label, 'cssz', SOURCES['social'],
                              conditional=not main,
-                             amount=_amount(y, 'social_main' if main else 'social_secondary')))
+                             amount=_amount(y, 'social_main' if main else 'social_secondary', month=m)))
             out.append(_item('health_advance', date(following.year, following.month, 8), label, 'health_insurer',
                              SOURCES['health'], conditional=not main,
-                             amount=_amount(y, 'health_main') if main else None))
+                             amount=_amount(y, 'health_main', month=m) if main else None))
         period = following
     # Yearly obligations for the tax year before each calendar year in the window.
     for year in range(start.year, end.year + 1):
