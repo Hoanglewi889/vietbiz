@@ -22,13 +22,16 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from typing import Literal
-from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from cryptography.exceptions import InvalidTag
+
+from .crypto import seal, statement_context, unseal
 from .database import connection
+from .web_security import attachment_disposition
 from .tasks import today_prague
 
 MAX_FILE = 2 * 1024 * 1024
@@ -424,7 +427,8 @@ def build_router(current_user, authorize, audit):
                         meta['statement_no']))
             # CR-13: the original file stays with the company, as received.
             db.execute('INSERT INTO bank_import_files(import_id,organization_id,media_type,content) VALUES(?,?,?,?)',
-                       (import_id, org_id, 'text/csv' if fmt == 'csv' else 'text/plain', raw))
+                       (import_id, org_id, 'text/csv' if fmt == 'csv' else 'text/plain',
+                        seal(raw, statement_context(org_id, import_id))))
             added = 0
             for row in rows:
                 inserted = db.execute(
@@ -589,10 +593,12 @@ def build_router(current_user, authorize, audit):
             raise HTTPException(404, 'Statement not found')
         # Codex review, PR #19: header values are Latin-1, so a Czech or Vietnamese name goes in an
         # RFC 5987 `filename*` and the plain `filename` gets an ASCII fallback.
-        plain = unicodedata.normalize('NFKD', row['filename']).encode('ascii', 'ignore').decode()
-        safe = ''.join(ch for ch in plain if ch.isalnum() or ch in '._-') or 'statement'
-        disposition = f"attachment; filename=\"{safe}\"; filename*=UTF-8''{quote(row['filename'], safe='')}"
-        return Response(bytes(row['content']), media_type=row['media_type'],
+        disposition = attachment_disposition(row['filename'], 'statement')
+        try:
+            content = unseal(row['content'], statement_context(org_id, import_id))
+        except InvalidTag:
+            raise HTTPException(500, 'Statement cannot be decrypted') from None
+        return Response(content, media_type=row['media_type'],
                         headers={'Content-Disposition': disposition, 'X-Content-Type-Options': 'nosniff'})
 
     @router.get('/coverage')

@@ -17,6 +17,11 @@ const path = require("node:path");
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // Security headers (report 10.11.2026): the workspace must run under its CSP without violations.
+  const cspViolations = [];
+  page.on("console", (m) => {
+    if (m.text().includes("Content Security Policy")) cspViolations.push(m.text());
+  });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
   const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js"].flatMap((file) =>
@@ -1172,6 +1177,8 @@ const path = require("node:path");
         (await page.locator("#profile-org option").count()) === 1 &&
         (await page.locator("#profile-save").isDisabled()),
     );
+    if (cspViolations.length) console.error("CSP", [...new Set(cspViolations)]);
+    check("The workspace runs under its Content-Security-Policy without violations", cspViolations.length === 0);
     check("No browser JavaScript errors", errors.length === 0);
     const report = {
       status: "passed",
