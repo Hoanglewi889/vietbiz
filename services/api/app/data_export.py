@@ -27,31 +27,33 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from .crypto import document_context, statement_context, unseal
-from .database import connection
+from .database import connection, snapshot
 from .web_security import attachment_disposition
 
-# Tables that belong to one company, with the columns that stay inside VietBiz.
+# Columns that stay inside VietBiz in every table.
+INTERNAL = {'idempotency_key', 'request_hash', 'storage_path', 'dedupe_key'}
+# Tables that belong to one company, with any further columns that stay inside VietBiz.
 TABLES = {
     'organizations': (),
     'memberships': (),
     'invitations': (),
     'billing_profiles': (),
     'client_profiles': (),
-    'documents': ('storage_path',),
+    'documents': (),
     'document_extractions': (),
     'document_flags': (),
     'document_line_sets': (),
     'document_lines': (),
     'goods_catalogue': (),
-    'accounting_tasks': ('idempotency_key', 'request_hash'),
+    'accounting_tasks': (),
     'task_events': (),
-    'task_comments': ('idempotency_key', 'request_hash'),
+    'task_comments': (),
     'cashbook_entries': (),
-    'issued_invoices': ('idempotency',),
+    'issued_invoices': (),
     'bank_imports': (),
-    'bank_transactions': ('dedupe_key',),
+    'bank_transactions': (),
     'staff_members': (),
-    'shifts': ('idempotency_key', 'request_hash'),
+    'shifts': (),
     'cash_closes': (),
     'audit_events': (),
 }
@@ -75,7 +77,9 @@ def _rows(db, table: str, org_id: str) -> list[dict]:
         args = (org_id,)
     else:
         query, args = f'SELECT * FROM {table} WHERE organization_id=?', (org_id,)  # table names are constants
-    hidden = set(TABLES[table])
+    # Internal fields are dropped from every table, whatever the table list says
+    # (Codex review, PR #25: invoices and cashbook entries carried their retry keys).
+    hidden = set(TABLES[table]) | INTERNAL
     return [{k: v for k, v in dict(row).items() if k not in hidden} for row in db.execute(query, args).fetchall()]
 
 
@@ -83,7 +87,8 @@ def build_export(org_id: str) -> tuple[tempfile.SpooledTemporaryFile, dict]:
     made = datetime.now(timezone.utc).isoformat(timespec='seconds')
     spool = tempfile.SpooledTemporaryFile(max_size=32 * 1024 * 1024)
     counts, unreadable = {}, []
-    with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as archive, connection() as db:
+    # One snapshot for every table and original (Codex review, PR #25).
+    with zipfile.ZipFile(spool, 'w', zipfile.ZIP_DEFLATED) as archive, snapshot() as db:
         for table in TABLES:
             rows = _rows(db, table, org_id)
             counts[table] = len(rows)

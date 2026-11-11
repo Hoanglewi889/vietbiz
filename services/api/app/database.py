@@ -52,6 +52,28 @@ def connection():
         yield Transaction(conn)
 
 
+@contextmanager
+def snapshot():
+    """Read-only transaction that sees one consistent state of the database for all its
+    queries (Codex review, PR #25: an export must not mix rows from before and after a write).
+    PostgreSQL: REPEATABLE READ. SQLite: an explicit BEGIN, so the reads share one snapshot
+    (writers wait until it ends). Always rolled back."""
+    if engine.dialect.name == 'postgresql':
+        with engine.connect().execution_options(isolation_level='REPEATABLE READ') as conn:
+            try:
+                conn.exec_driver_sql('SET TRANSACTION READ ONLY')
+                yield Transaction(conn)
+            finally:
+                conn.rollback()
+    else:
+        with engine.connect() as conn:
+            conn.exec_driver_sql('BEGIN')
+            try:
+                yield Transaction(conn)
+            finally:
+                conn.rollback()
+
+
 def require_schema():
     with engine.connect() as conn:
         if not inspect(conn).has_table('alembic_version'):

@@ -69,3 +69,49 @@ def test_only_the_owner_may_export():
     assert export(org, employee).status_code == 403
     other_owner, _, _, _ = company()
     assert export(org, other_owner).status_code == 403
+
+
+def test_invoice_and_cashbook_retry_keys_stay_inside():
+    # Codex review, PR #25: populated invoices and cashbook entries must not carry their keys.
+    from test_cashbook import entry
+    from test_invoicing import draft, issue
+    owner, accountant, employee, org = payer_company()
+    issue(org, owner, draft(org, owner).json()['id'])
+    assert entry(org, owner, key='export-cash-1').status_code == 201
+    z = unzip(export(org, owner))
+    for table in ('issued_invoices', 'cashbook_entries'):
+        rows = json.loads(z.read(f'data/{table}.json'))
+        assert rows and all('idempotency_key' not in r and 'request_hash' not in r for r in rows), table
+
+
+def test_the_export_reads_one_consistent_snapshot(monkeypatch):
+    # Codex review, PR #25: a task created while the export runs must appear with its event
+    # or not at all, never as an event without its task.
+    import threading
+
+    from app import data_export
+    owner, accountant, employee, org, _ = stocked()
+    real_rows, writer = data_export._rows, {}
+
+    def create_task():
+        writer['status'] = c.post(f'/v1/organizations/{org}/tasks',
+                                  headers={**h(accountant), 'Idempotency-Key': 'export-during-1'},
+                                  json={'title': 'Created during export', 'description': '', 'priority': 'normal',
+                                        'due_date': None, 'document_id': None}).status_code
+
+    def rows(db, table, org_id):
+        result = real_rows(db, table, org_id)
+        if table == 'accounting_tasks':
+            thread = threading.Thread(target=create_task)
+            writer['thread'] = thread
+            thread.start()
+            thread.join(timeout=2)  # PostgreSQL: the write commits now; SQLite: it waits for the export
+        return result
+
+    monkeypatch.setattr(data_export, '_rows', rows)
+    z = unzip(export(org, owner))
+    writer['thread'].join(timeout=10)
+    assert writer.get('status') == 201
+    tasks = {t['id'] for t in json.loads(z.read('data/accounting_tasks.json'))}
+    events = json.loads(z.read('data/task_events.json'))
+    assert all(e['task_id'] in tasks for e in events)
