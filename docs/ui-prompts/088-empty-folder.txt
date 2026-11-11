@@ -1,0 +1,327 @@
+[요소] 종이를 삼키는 빈 폴더 (088, 빈·오류 상태)
+[요소 설명] 프로젝트가 없을 때는 빈 폴더가 천천히 떠 있고, 템플릿에 손을 올리면 폴더가 살짝 벌어지며 종이가 고개를 내밉니다. 템플릿을 고르면 종이가 날아 들어가 폴더가 꿀꺽 삼킨 뒤 첫 항목이 목록으로 바뀌고, 모두 지우면 폴더가 다시 내려앉습니다.
+[조작] 템플릿 버튼에 마우스를 올렸다가 눌러 첫 프로젝트를 만들어 보세요. 목록의 휴지통으로 모두 지우면 빈 화면이 돌아옵니다
+
+아래 UI 요소를 제 프로젝트에 적용해 주세요.
+
+[먼저 확인할 것]
+1. 프로젝트의 프레임워크(React, Next, Vue, Svelte, 순수 HTML 등), 스타일 방식(CSS 모듈, Tailwind, 전역 CSS), 기존 테마 방식(data-theme, dark 클래스, CSS 변수)을 찾아 확인하세요.
+2. 삽입 위치의 파일과 기존 요소를 먼저 찾고, 그 요소가 어디서 쓰이는지 보고하세요.
+
+[적용 방법]
+3. 삽입 위치에 새 컴포넌트로 추가하세요. 교체 대상이 있으면 그 요소를 아래 요소로 바꾸세요.
+4. 기존 데이터, props, 이벤트 핸들러, 폼 값, 접근성 속성(라벨, aria, 키보드 조작)은 그대로 유지하세요.
+5. 아래 코드의 구조, 형태, 모션 값(시간, 곡선, 지연)을 기준으로 옮기세요. 프레임워크에 맞게 컴포넌트와 상태로 바꾸되, 디자인을 새로 추측해 바꾸지 마세요.
+6. 색은 아래 --ux-* 토큰을 프로젝트의 기존 테마 변수에 연결하세요. 라이트와 다크 두 값을 모두 유지하고, 두 테마에서 확인하세요.
+7. 스타일은 이 요소의 클래스(.uNNN) 안에만 두고, 전역 CSS나 전역 스크립트는 바꾸지 마세요. 클래스 이름이 기존 요소와 겹치지 않게 하세요.
+8. 예시 문구와 예시 데이터는 프로젝트의 실제 데이터로 바꾸세요. 갤러리 전용 화면과 시연 코드는 가져오지 마세요. 코드 맨 위의 라이선스 주석 한 줄은 새 컴포넌트 파일 맨 위에 남겨 두세요.
+9. prefers-reduced-motion을 켠 상태에서도 기능과 최종 상태가 그대로 작동하는지 확인하세요.
+
+[완료 보고]
+10. 변경한 파일 목록, 기존 요소와 달라진 동작, 확인한 범위(두 테마, 모바일 너비, 키보드), 확인하지 못한 항목을 알려 주세요.
+
+[삽입 위치] 여기에 페이지나 컴포넌트 이름을 적으세요
+[교체 대상] 기존 요소의 파일 경로나 컴포넌트 이름을 적으세요. 없으면 "없음"
+
+--- 코드 시작 (이 코드 전체가 실제로 동작하는 원본입니다) ---
+<!-- Lucian UX/UI Prompt #088 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#088 -->
+<style>
+/* lucianLabs UI 요소 — 공통 테마 토큰 (라이트 / 다크)
+   라이트 기본값 → 시스템이 다크면 다크 → data-theme으로 명시하면 그 값을 우선합니다.
+   요소 CSS는 --ux-* 토큰만 참조하므로, 프로젝트 테마 변수에 이 값을 매핑하면 됩니다. */
+:root{
+  color-scheme:light;
+  --ux-page:#F4F2EE;
+  --ux-surface:#FFFFFF;
+  --ux-surface-2:#F5F3EF;
+  --ux-surface-3:#EAE7E1;
+  --ux-ink:#16151B;
+  --ux-ink-2:#57535F;
+  --ux-ink-3:#8E8A97;
+  --ux-line:rgba(22,21,27,.09);
+  --ux-line-2:rgba(22,21,27,.17);
+  --ux-accent:#6A57F2;
+  --ux-accent-2:#2F8FE0;
+  --ux-accent-soft:rgba(106,87,242,.12);
+  --ux-accent-ink:#FFFFFF;
+  --ux-mint:#119C72;
+  --ux-warn:#D6731E;
+  --ux-danger:#D93A55;
+  --ux-glass:rgba(255,255,255,.58);
+  --ux-glass-line:rgba(255,255,255,.85);
+  --ux-shadow:rgba(40,30,80,.14);
+  --ux-shadow-strong:rgba(40,30,80,.3);
+  --ux-grad:linear-gradient(120deg,#7B61FF,#3D8BFF 55%,#1FB89A);
+  --ux-ease:cubic-bezier(.2,.8,.2,1);
+  --ux-spring:cubic-bezier(.34,1.45,.64,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ux-page:#07080D;
+    --ux-surface:#13141C;
+    --ux-surface-2:#1A1B25;
+    --ux-surface-3:#252632;
+    --ux-ink:#F4F0E8;
+    --ux-ink-2:rgba(244,240,232,.68);
+    --ux-ink-3:rgba(244,240,232,.42);
+    --ux-line:rgba(255,255,255,.08);
+    --ux-line-2:rgba(255,255,255,.16);
+    --ux-accent:#B7A4FF;
+    --ux-accent-2:#7DB4FF;
+    --ux-accent-soft:rgba(183,164,255,.15);
+    --ux-accent-ink:#0B0C12;
+    --ux-mint:#7EE8C0;
+    --ux-warn:#FFB26B;
+    --ux-danger:#FF7D8C;
+    --ux-glass:rgba(255,255,255,.07);
+    --ux-glass-line:rgba(255,255,255,.18);
+    --ux-shadow:rgba(0,0,0,.45);
+    --ux-shadow-strong:rgba(0,0,0,.72);
+    --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ux-page:#07080D;
+  --ux-surface:#13141C;
+  --ux-surface-2:#1A1B25;
+  --ux-surface-3:#252632;
+  --ux-ink:#F4F0E8;
+  --ux-ink-2:rgba(244,240,232,.68);
+  --ux-ink-3:rgba(244,240,232,.42);
+  --ux-line:rgba(255,255,255,.08);
+  --ux-line-2:rgba(255,255,255,.16);
+  --ux-accent:#B7A4FF;
+  --ux-accent-2:#7DB4FF;
+  --ux-accent-soft:rgba(183,164,255,.15);
+  --ux-accent-ink:#0B0C12;
+  --ux-mint:#7EE8C0;
+  --ux-warn:#FFB26B;
+  --ux-danger:#FF7D8C;
+  --ux-glass:rgba(255,255,255,.07);
+  --ux-glass-line:rgba(255,255,255,.18);
+  --ux-shadow:rgba(0,0,0,.45);
+  --ux-shadow-strong:rgba(0,0,0,.72);
+  --ux-grad:linear-gradient(120deg,#B7A4FF,#7DB4FF 55%,#A5F2D3);
+}
+/* 요소 공통 베이스 — 루트에 .ux 클래스를 붙입니다 */
+.ux,.ux *,.ux *::before,.ux *::after{box-sizing:border-box}
+.ux{
+  font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+  color:var(--ux-ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em;
+  -webkit-tap-highlight-color:transparent;
+  word-break:keep-all;overflow-wrap:break-word;
+}
+/* :where()로 명시도를 0으로 둬서, 요소 클래스가 버튼·입력의 색과 글꼴을 덮어쓸 수 있게 합니다 */
+:where(.ux) :is(button,input,textarea,select){font:inherit;color:inherit}
+:where(.ux) button{cursor:pointer}
+.ux :focus-visible{outline:2px solid var(--ux-accent);outline-offset:3px}
+.ux [hidden]{display:none!important}
+/* 모션 줄이기: 전환은 즉시 끝나고, 무한 반복은 한 번으로 줄여 최종 상태가 보이게 합니다 */
+@media (prefers-reduced-motion:reduce){
+  .ux,.ux *,.ux *::before,.ux *::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;
+  }
+}
+</style>
+
+<style>
+.u088{position:relative;width:340px;height:420px;display:flex;flex-direction:column;border-radius:30px;background:var(--ux-surface);box-shadow:0 0 0 1px var(--ux-line),0 30px 60px -36px var(--ux-shadow-strong);overflow:hidden}
+.u088-top{display:flex;align-items:center;gap:8px;height:66px;flex:none;padding:0 14px 0 22px}
+.u088-top b{font-size:19px;font-weight:850;letter-spacing:-.04em}
+.u088-n{min-width:26px;height:22px;padding:0 7px;border-radius:999px;display:inline-grid;place-items:center;background:var(--ux-surface-2);font-size:12px;font-weight:800;color:var(--ux-ink-2);font-variant-numeric:tabular-nums}
+.u088-add{margin-left:auto;width:38px;height:38px;border:0;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--ux-ink);color:var(--ux-page);transition:transform .4s var(--ux-spring),opacity .3s}
+.u088-add:hover{transform:rotate(90deg)}
+.u088-add:active{transform:rotate(90deg) scale(.88)}
+.u088-add[aria-disabled="true"]{opacity:.3;transform:none}
+.u088-add svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.u088-body{position:relative;flex:1}
+.u088-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 22px 34px;text-align:center;transition:opacity .4s .1s,transform .5s var(--ux-ease) .1s}
+.u088.has .u088-empty{opacity:0;transform:scale(.94);visibility:hidden;transition:opacity .25s,transform .4s var(--ux-ease),visibility 0s .4s}
+.u088-art{position:relative;width:168px;height:138px}
+.u088-fl{animation:u088-f 5s ease-in-out infinite}
+@keyframes u088-f{50%{transform:translateY(-7px)}}
+.u088-art svg{display:block;width:168px;height:128px;overflow:visible;transform-origin:50% 92%}
+.u088-sh{position:absolute;left:34px;right:34px;bottom:0;height:10px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--ux-ink) 16%,transparent),transparent);animation:u088-s 5s ease-in-out infinite}
+@keyframes u088-s{50%{transform:scaleX(.8);opacity:.6}}
+.u088-front,.u088-pp{transform-box:fill-box;transform-origin:50% 100%;transition:transform .55s var(--ux-spring)}
+.u088-pp.b{transition-delay:.04s}
+.u088-art:hover .u088-front,.u088-empty:has(.u088-tpl button:hover,.u088-tpl button:focus-visible) .u088-front{transform:skewX(-7deg) scaleY(.86)}
+.u088-art:hover .u088-pp.a,.u088-empty:has(.u088-tpl button:hover,.u088-tpl button:focus-visible) .u088-pp.a{transform:translateY(-10px) rotate(-5deg)}
+.u088-art:hover .u088-pp.b,.u088-empty:has(.u088-tpl button:hover,.u088-tpl button:focus-visible) .u088-pp.b{transform:translateY(-6px) rotate(4deg)}
+.u088 .u088-art.eat .u088-front{transform:skewX(-12deg) scaleY(.74)}
+.u088 .u088-art.eat .u088-pp.a{transform:translateY(-14px) rotate(-7deg)}
+.u088 .u088-art.eat .u088-pp.b{transform:translateY(-10px) rotate(6deg)}
+.u088-art.gulp svg{animation:u088-gulp .6s var(--ux-ease)}
+@keyframes u088-gulp{30%{transform:scale(1.08,.88)}62%{transform:scale(.97,1.05)}}
+.u088-art.drop svg{animation:u088-drop .85s var(--ux-spring) backwards}
+@keyframes u088-drop{from{transform:translateY(-46px) scale(.85);opacity:0}}
+.u088-t{margin:12px 0 0;font-size:18.5px;font-weight:850;letter-spacing:-.04em}
+.u088-s{margin:6px 0 0;font-size:13.5px;font-weight:600;line-height:1.5;color:var(--ux-ink-3)}
+.u088-tpl{display:flex;gap:6px;margin-top:18px}
+.u088-tpl button{height:38px;padding:0 12px 0 8px;border:0;border-radius:13px;display:inline-flex;align-items:center;gap:7px;background:var(--ux-surface-2);font-size:13px;font-weight:750;color:var(--ux-ink-2);transition:transform .35s var(--ux-spring),background-color .2s,color .2s}
+.u088-tpl button:hover{background:var(--ux-surface-3);color:var(--ux-ink);transform:translateY(-2px)}
+.u088-tpl button:active{transform:scale(.94)}
+.u088-tpl i,.u088-ic{display:grid;place-items:center;background:var(--c);color:#fff}
+.u088-tpl i{width:24px;height:24px;border-radius:8px}
+.u088-tpl svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.u088-full{position:absolute;inset:0;padding:0 12px 12px;opacity:0;visibility:hidden;transition:opacity .25s,visibility 0s .25s}
+.u088.has .u088-full{opacity:1;visibility:visible;transition:opacity .3s .2s}
+.u088-list{margin:0;padding:0;list-style:none}
+.u088-it{display:grid;grid-template-rows:1fr;transition:grid-template-rows .38s var(--ux-ease),opacity .25s}
+.u088-it.out{grid-template-rows:0fr;opacity:0}
+.u088-clip{min-height:0;overflow:hidden}
+.u088-row{display:flex;align-items:center;gap:12px;padding:8px 6px 8px 10px;border-radius:16px;transition:background-color 1s}
+.u088-row:hover{background:var(--ux-surface-2);transition-duration:.2s}
+.u088-it.new .u088-row{background:color-mix(in srgb,var(--c) 13%,transparent);animation:u088-in .55s var(--ux-spring) backwards}
+@keyframes u088-in{from{opacity:0;transform:translateY(-14px) scale(.97)}}
+.u088-ic{width:40px;height:40px;flex:none;border-radius:13px}
+.u088-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.u088-tx{flex:1;min-width:0}
+.u088-tx b{display:block;font-size:14.5px;font-weight:780;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u088-tx small{display:block;margin-top:2px;font-size:12px;font-weight:650;color:var(--ux-ink-3)}
+.u088-del{width:36px;height:36px;flex:none;border:0;padding:0;border-radius:11px;display:grid;place-items:center;background:transparent;color:var(--ux-ink-3);transition:background-color .2s,color .2s,transform .3s var(--ux-spring)}
+.u088-del:hover{background:color-mix(in srgb,var(--ux-danger) 14%,transparent);color:var(--ux-danger)}
+.u088-del:active{transform:scale(.88)}
+.u088-del svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.u088-more{display:flex;align-items:center;gap:12px;width:100%;height:56px;margin-top:4px;padding:0 9px;border:1.5px dashed var(--ux-line-2);border-radius:16px;background:transparent;font-size:13.5px;font-weight:750;color:var(--ux-ink-3);text-align:left;transition:color .2s,border-color .2s,opacity .3s}
+.u088-more i{width:38px;height:38px;flex:none;border-radius:12px;display:grid;place-items:center;background:var(--ux-surface-2)}
+.u088-more svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.u088-more:hover{color:var(--ux-ink);border-color:var(--ux-ink-3)}
+.u088-more[aria-disabled="true"]{opacity:.55;color:var(--ux-ink-3);border-color:var(--ux-line-2)}
+.u088-fly{position:absolute;left:0;top:0;z-index:5;width:26px;height:32px;border-radius:5px;background:linear-gradient(var(--c,#10B981) 0 7px,transparent 7px),repeating-linear-gradient(180deg,transparent 0 12px,#CBD3E1 12px 14px) 5px 0/16px 100% no-repeat,#fff;box-shadow:0 6px 14px -6px rgba(10,12,20,.45);opacity:0;pointer-events:none}
+.u088-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+</style>
+<div class="ux u088">
+  <div class="u088-top"><b>내 프로젝트</b><span class="u088-n" aria-hidden="true">0</span><button class="u088-add" type="button" aria-label="새 프로젝트 만들기"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg></button></div>
+  <div class="u088-body">
+    <div class="u088-empty">
+      <div class="u088-art" aria-hidden="true">
+        <div class="u088-fl">
+          <svg viewBox="0 0 168 128">
+            <path d="M16 26a10 10 0 0 1 10-10h34a8 8 0 0 1 6 2.6l8 8.4h68a10 10 0 0 1 10 10v66a10 10 0 0 1-10 10H26a10 10 0 0 1-10-10z" fill="#0B9B70"/>
+            <g class="u088-pp a"><rect x="30" y="26" width="92" height="72" rx="6" fill="#EEF1F7"/><path d="M42 40h48M42 50h62M42 60h36" stroke="#C9D1DF" stroke-width="3" stroke-linecap="round"/></g>
+            <g class="u088-pp b"><rect x="50" y="32" width="90" height="68" rx="6" fill="#fff"/><path d="M62 46h52M62 56h64M62 66h30" stroke="#D3DAE6" stroke-width="3" stroke-linecap="round"/></g>
+            <g class="u088-front"><path d="M10 50a10 10 0 0 1 10-10h128a10 10 0 0 1 10 10.8l-5 52a10 10 0 0 1-10 9.2H25a10 10 0 0 1-10-9.2z" fill="#16C08C"/><path d="M22 47h124" stroke="#fff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/><rect x="66" y="72" width="36" height="8" rx="4" fill="#fff" fill-opacity=".38"/></g>
+          </svg>
+        </div>
+        <span class="u088-sh"></span>
+      </div>
+      <p class="u088-t">아직 프로젝트가 없어요</p>
+      <p class="u088-s">템플릿을 하나 골라 첫 프로젝트를 시작해 보세요</p>
+      <div class="u088-tpl" role="group" aria-label="템플릿으로 만들기"></div>
+    </div>
+    <div class="u088-full">
+      <ul class="u088-list" aria-label="프로젝트 목록"></ul>
+      <button class="u088-more" type="button"><i aria-hidden="true"><svg viewBox="0 0 14 14"><path d="M7 2v10M2 7h10"/></svg></i><span>새 프로젝트</span></button>
+    </div>
+  </div>
+  <span class="u088-fly" aria-hidden="true"></span>
+  <span class="u088-sr" role="status"></span>
+</div>
+
+<script>
+(function () {
+  var root = document.currentScript.previousElementSibling;
+  var art = root.querySelector('.u088-art'), tplBox = root.querySelector('.u088-tpl'), list = root.querySelector('.u088-list');
+  var add = root.querySelector('.u088-add'), more = root.querySelector('.u088-more'), n = root.querySelector('.u088-n'), fly = root.querySelector('.u088-fly'), live = root.querySelector('.u088-sr');
+  var rm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var MAX = 5;
+  var T = [
+    ['빈 문서', '제목 없는 문서', '#3D8BFF', '<path d="M4 1.8h5.4L12.4 5v9.2H4z"/><path d="M9.4 1.8V5h3"/>'],
+    ['회의록', '10월 디자인 회의', '#10B981', '<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="2.4"/><path d="M5.4 6.2h5.2M5.4 9.4h3.4"/>'],
+    ['로드맵', '4분기 제품 로드맵', '#FF8A3D', '<path d="M2 4.2l4-1.8 4 1.8 4-1.8v9.4l-4 1.8-4-1.8-4 1.8z"/><path d="M6 2.4v9.4M10 4.2v9.4"/>']
+  ];
+  T.forEach(function (t, k) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = '<i style="--c:' + t[2] + '" aria-hidden="true"><svg viewBox="0 0 16 16">' + t[3] + '</svg></i>';
+    b.appendChild(document.createTextNode(t[0]));
+    b.addEventListener('click', function () { create(k, b); });
+    tplBox.appendChild(b);
+  });
+  var tpls = tplBox.querySelectorAll('button');
+  var made = [0, 0, 0], count = 0, busy = false, rot = 0, ts = [];
+  function later(fn, ms) { ts.push(setTimeout(function () { if (root.isConnected) fn(); }, ms)); }
+  function setCount(v) {
+    var dir = v > count ? 1 : -1;
+    count = v;
+    n.textContent = v;
+    if (!rm) n.animate([{ transform: 'translateY(' + dir * 8 + 'px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    var full = v >= MAX;
+    add.setAttribute('aria-disabled', String(full));
+    more.setAttribute('aria-disabled', String(full));
+    more.lastChild.textContent = full ? '최대 5개까지 만들 수 있어요' : '새 프로젝트';
+  }
+  function insert(k) {
+    made[k]++;
+    var t = T[k], name = t[1] + (made[k] > 1 ? ' ' + made[k] : '');
+    var li = document.createElement('li');
+    li.className = 'u088-it new';
+    li.style.setProperty('--c', t[2]);
+    li.innerHTML = '<div class="u088-clip"><div class="u088-row"><span class="u088-ic" aria-hidden="true"><svg viewBox="0 0 16 16">' + t[3] + '</svg></span><span class="u088-tx"><b></b><small></small></span><button class="u088-del" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.2h10M6.2 4.2V2.6h3.6v1.6M4.6 4.2l.6 9.2h5.6l.6-9.2"/></svg></button></div></div>';
+    li.querySelector('b').textContent = name;
+    li.querySelector('small').textContent = '방금 만듦 · ' + t[0];
+    li.querySelector('.u088-del').setAttribute('aria-label', name + ' 삭제');
+    list.insertBefore(li, list.firstChild);
+    var lost = root.querySelector('.u088-empty').contains(document.activeElement);
+    root.classList.add('has');
+    setCount(count + 1);
+    live.textContent = '‘' + name + '’ 프로젝트를 만들었어요';
+    if (lost) more.focus({ preventScroll: true });
+    later(function () { li.classList.remove('new'); }, 1400);
+  }
+  // 첫 프로젝트일 때만 종이가 버튼에서 폴더로 포물선을 그리며 날아가고, 폴더가 삼킨 뒤 목록으로 바뀝니다
+  function create(k, from) {
+    if (busy || count >= MAX) return;
+    if (count > 0 || rm) { insert(k); return; }
+    busy = true;
+    var rr = root.getBoundingClientRect(), s = root.offsetWidth / rr.width;
+    var fr = from.getBoundingClientRect(), ar = art.getBoundingClientRect();
+    var x0 = (fr.left + fr.width / 2 - rr.left) * s, y0 = (fr.top + fr.height / 2 - rr.top) * s;
+    var x1 = (ar.left + ar.width / 2 - rr.left) * s, y1 = (ar.top + ar.height * 0.3 - rr.top) * s;
+    var dx = x1 - x0, dy = y1 - y0;
+    fly.style.setProperty('--c', T[k][2]);
+    fly.style.left = (x0 - 13) + 'px'; fly.style.top = (y0 - 16) + 'px';
+    art.classList.add('eat');
+    fly.animate([
+      { transform: 'translate(0,0) rotate(-10deg) scale(.5)', opacity: 0 },
+      { transform: 'translate(' + dx * 0.45 + 'px,' + (dy * 0.45 - 70) + 'px) rotate(12deg) scale(1.1)', opacity: 1, offset: 0.45 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(0deg) scale(.8)', opacity: 1, offset: 0.82 },
+      { transform: 'translate(' + dx + 'px,' + (dy + 26) + 'px) rotate(0deg) scale(.6)', opacity: 0 }
+    ], { duration: 760, easing: 'cubic-bezier(.45,0,.25,1)' });
+    later(function () { art.classList.remove('eat'); art.classList.add('gulp'); }, 700);
+    later(function () { art.classList.remove('gulp'); insert(k); busy = false; }, 1180);
+  }
+  add.addEventListener('click', function () { create(rot++ % 3, add); });
+  more.addEventListener('click', function () { create(rot++ % 3, more); });
+  // 지운 줄은 높이가 접히며 사라지고, 마지막 하나를 지우면 폴더가 위에서 다시 내려앉습니다
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('.u088-del');
+    if (!b) return;
+    var li = b.closest('li');
+    if (li.classList.contains('out')) return;
+    var had = li.contains(document.activeElement);
+    li.classList.add('out');
+    setCount(count - 1);
+    live.textContent = '‘' + li.querySelector('b').textContent + '’ 프로젝트를 지웠어요';
+    if (count === 0) later(function () {
+      if (count !== 0) return;
+      root.classList.remove('has');
+      art.classList.remove('drop'); void art.offsetWidth; art.classList.add('drop');
+      later(function () { art.classList.remove('drop'); }, 900);
+      if (had) tpls[0].focus({ preventScroll: true });
+    }, rm ? 0 : 160);
+    later(function () {
+      li.remove();
+      if (had && count > 0) {
+        var left = list.querySelector('.u088-it:not(.out) .u088-del');
+        (left || more).focus({ preventScroll: true });
+      }
+    }, rm ? 0 : 380);
+  });
+})();
+</script>
+--- 코드 끝 ---

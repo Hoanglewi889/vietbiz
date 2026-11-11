@@ -348,7 +348,10 @@ function renderTasks() {
     b.append(top, text("h3", item.title), meta);
     list.append(b);
   }
-  if (!state.tasks.length) empty(list, t("emptyTasks"), t("emptyHint"), "↗");
+  // #088: a company with no tasks yet gets the folder with task templates (empty-folder.js).
+  const started =
+    typeof renderTaskStarter === "function" && renderTaskStarter(list, state.tasks.length);
+  if (!state.tasks.length && !started) empty(list, t("emptyTasks"), t("emptyHint"), "↗");
   $("more-tasks").hidden = !state.next;
 }
 async function selectTask(id) {
