@@ -28,6 +28,8 @@ def category_for(text: str) -> str:
 
 def extract_items(xml: bytes, source_id: str):
     if len(xml) > 2_000_000: raise ValueError('RSS is too large')
+    # Security review 11.11.2026: feeds never need a DTD; refuse one like the ISDOC import does.
+    if b'<!DOCTYPE' in xml.upper() or b'<!ENTITY' in xml.upper(): raise ValueError('DTD not allowed in feed')
     root=ET.fromstring(xml)
     result=[]
     # RSS 2.0 or Atom feed, no article body retained

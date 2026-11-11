@@ -10,7 +10,7 @@ other environment. Lifting it is a separate decision for the owner.
 | 2 | Originals stored in the clear | Documents (disk) and statement files (DB) sealed with AES-256-GCM, bound to company + record | Key in a secret store, backed up apart from the data; `seal-existing` on any older data; disk/backup encryption at the host as a second layer |
 | 3 | No rate limit | Per-client limits in the API: general, sensitive routes, lock-out after repeated 401 | The same limits at the reverse proxy when there is more than one worker or a proxy in front |
 | 4 | No security headers | CSP without inline script, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP, HSTS on HTTPS | — |
-| 5 | No separate security review | `@codex security review` requested on the PR; Claude's checklist below | Fix or answer every finding before merge |
+| 5 | No separate security review | Claude's review of the whole API: `docs/reviews/CLAUDE_SECURITY_REVIEW_2026-11-11.md` (4 findings fixed with tests); `@codex security review` requested | Codex security review to run; answer every finding before merge |
 
 ## Configuration
 
