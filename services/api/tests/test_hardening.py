@@ -73,18 +73,18 @@ def test_statement_files_are_sealed_in_the_database():
 
 def test_the_data_key_must_be_32_bytes(monkeypatch):
     monkeypatch.setenv('VIETBIZ_DATA_KEY', 'c2hvcnQ')
-    crypto.data_key.cache_clear()
+    crypto.reset_keys()
     try:
         with pytest.raises(RuntimeError):
             crypto.data_key()
         monkeypatch.setenv('VIETBIZ_ENV', 'production')
         monkeypatch.delenv('VIETBIZ_DATA_KEY')
-        crypto.data_key.cache_clear()
+        crypto.reset_keys()
         with pytest.raises(RuntimeError, match='required'):
             crypto.data_key()
     finally:
         monkeypatch.undo()
-        crypto.data_key.cache_clear()
+        crypto.reset_keys()
     assert len(crypto.data_key()) == 32
 
 
@@ -93,7 +93,7 @@ def test_security_headers_on_api_and_workspace():
         r = c.get(path)
         csp = r.headers['content-security-policy']
         assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp and "default-src 'none'" in csp
-        assert "'unsafe-inline'" not in csp.split('script-src')[1].split(';')[0]
+        assert "'unsafe-inline'" not in csp and "style-src 'self'" in csp
         assert r.headers['x-frame-options'] == 'DENY'
         assert r.headers['x-content-type-options'] == 'nosniff'
         assert r.headers['referrer-policy'] == 'no-referrer'
@@ -186,3 +186,122 @@ def test_an_allowed_origin_can_read_a_429(monkeypatch):
     finally:
         main.LIMITS.hits.clear()
         main.LIMITS.blocked.clear()
+
+
+def _keys(monkeypatch, current, kid, retired=''):
+    monkeypatch.setenv('VIETBIZ_DATA_KEY', current)
+    monkeypatch.setenv('VIETBIZ_DATA_KEY_ID', kid)
+    monkeypatch.setenv('VIETBIZ_DATA_KEYS_RETIRED', retired)
+    crypto.reset_keys()
+
+
+def test_key_rotation_keeps_originals_readable_and_reseals_them(monkeypatch):
+    import base64
+    import secrets
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    a, b = (base64.urlsafe_b64encode(secrets.token_bytes(32)).decode() for _ in range(2))
+    try:
+        _keys(monkeypatch, a, 'k1')
+        owner = user('Rotation owner')
+        org = c.post('/v1/organizations', json={'name': 'Rotation'}, headers=h(owner)).json()['id']
+        did = upload(org, owner)
+        old_doc = upload(org, owner, PDF + b' first format')
+        # An original in the first format (VBX1, no key id), sealed with key A.
+        nonce = secrets.token_bytes(12)
+        context = crypto.document_context(org, old_doc)
+        stored(old_doc).write_bytes(crypto.LEGACY + nonce + AESGCM(crypto._decode(a)).encrypt(
+            nonce, PDF + b' first format', context.encode()))
+        assert crypto.sealed_with(stored(did).read_bytes()) == 'k1'
+        # Rotate: B is current, A is retired; everything still opens.
+        _keys(monkeypatch, b, 'k2', f'k1:{a}')
+        for doc, body in ((did, PDF), (old_doc, PDF + b' first format')):
+            assert c.get(f'/v1/organizations/{org}/documents/{doc}/original', headers=h(owner)).content == body
+        first = crypto.reseal()
+        assert first['documents'] >= 2  # other tests' originals use other keys: counted, left alone
+        assert {crypto.sealed_with(stored(d).read_bytes()) for d in (did, old_doc)} == {'k2'}
+        again = crypto.reseal()
+        assert again['documents'] == 0 and again['unreadable'] == first['unreadable']
+        # The retired key can go now.
+        _keys(monkeypatch, b, 'k2')
+        assert c.get(f'/v1/organizations/{org}/documents/{did}/original', headers=h(owner)).content == PDF
+        # An original naming a key that is gone does not open.
+        _keys(monkeypatch, a, 'k3')
+        assert c.get(f'/v1/organizations/{org}/documents/{did}/original', headers=h(owner)).status_code == 500
+    finally:
+        monkeypatch.undo()
+        crypto.reset_keys()
+
+
+def test_the_key_id_is_part_of_what_is_authenticated(monkeypatch):
+    blob = crypto.seal(b'synthetic', 'document:o:d')
+    kid = crypto.sealed_with(blob)
+    forged = crypto.MAGIC + bytes([len(kid)]) + kid.upper().encode() + blob[len(crypto.MAGIC) + 1 + len(kid):]
+    with pytest.raises(crypto.InvalidTag):
+        crypto.unseal(forged, 'document:o:d')
+    for bad in ('k 1', 'x' * 33):
+        monkeypatch.setenv('VIETBIZ_DATA_KEY_ID', bad)
+        crypto.reset_keys()
+        with pytest.raises(RuntimeError):
+            crypto.keyring()
+    monkeypatch.undo()
+    crypto.reset_keys()
+
+
+def test_each_caller_has_its_own_budget_behind_one_address():
+    limits = Limits(general=100, sensitive=0, failures=0, per_user=2)
+    assert limits.check('proxy', 'GET', '/v1/x', now=0, identity='alice') == 0
+    assert limits.check('proxy', 'GET', '/v1/x', now=0, identity='alice') == 0
+    assert limits.check('proxy', 'GET', '/v1/x', now=1, identity='alice') > 0
+    assert limits.check('proxy', 'GET', '/v1/x', now=1, identity='bob') == 0  # same address, other caller
+    assert limits.check('proxy', 'GET', '/v1/x', now=61, identity='alice') == 0
+
+
+def test_the_middleware_limits_by_credential_without_keeping_it(monkeypatch):
+    monkeypatch.setattr(main.LIMITS, 'per_user', 2)
+    main.LIMITS.hits.clear()
+    try:
+        client = TestClient(main.app)
+        alice = {'X-User': 'synthetic-alice'}
+        assert [client.get('/health', headers=alice).status_code for _ in range(3)] == [200, 200, 429]
+        assert client.get('/health', headers={'X-User': 'synthetic-bob'}).status_code == 200
+        assert not any('synthetic-alice' in str(key) for key in main.LIMITS.hits)
+    finally:
+        main.LIMITS.hits.clear()
+
+
+def test_damaged_sealed_headers_do_not_stop_a_rotation(monkeypatch):
+    # Codex review, PR #24: a truncated original is counted as unreadable, not a crash.
+    good = crypto.seal(b'synthetic', 'document:o:d')
+    kid = crypto.sealed_with(good)
+    for broken in (crypto.MAGIC, crypto.MAGIC + bytes([5]) + b'k', crypto.MAGIC + bytes([len(kid)]) + kid.encode() + b'short',
+                   crypto.LEGACY + b'tiny'):
+        with pytest.raises(crypto.InvalidTag):
+            crypto.unseal(broken, 'document:o:d')
+    assert crypto.needs_reseal(crypto.MAGIC) and crypto.needs_reseal(crypto.MAGIC + bytes([5]) + b'k')
+    owner = user('Damaged owner')
+    org = c.post('/v1/organizations', json={'name': 'Damaged'}, headers=h(owner)).json()['id']
+    broken_doc, fine_doc = upload(org, owner), upload(org, owner, PDF + b' fine')
+    stored(broken_doc).write_bytes(crypto.MAGIC)
+    try:
+        _keys(monkeypatch, crypto.base64.urlsafe_b64encode(b'\x01' * 32).decode(), 'k9',
+              'k1:' + crypto.base64.urlsafe_b64encode(crypto.keyring()[1][crypto.keyring()[0]]).decode())
+        result = crypto.reseal()
+        assert result['unreadable'] >= 1 and crypto.sealed_with(stored(fine_doc).read_bytes()) == 'k9'
+        assert c.get(f'/v1/organizations/{org}/documents/{broken_doc}/original', headers=h(owner)).status_code == 500
+    finally:
+        monkeypatch.undo()
+        crypto.reset_keys()
+
+
+def test_the_budget_follows_the_credential_the_auth_mode_checks(monkeypatch):
+    # Codex review, PR #24: in demo mode only X-User identifies the caller; a changing
+    # Authorization header must not buy a fresh budget.
+    monkeypatch.setattr(main.LIMITS, 'per_user', 2)
+    main.LIMITS.hits.clear()
+    try:
+        client = TestClient(main.app)
+        codes = [client.get('/health', headers={'X-User': 'synthetic-carol', 'Authorization': f'Bearer x{i}'}).status_code
+                 for i in range(3)]
+        assert codes == [200, 200, 429]
+    finally:
+        main.LIMITS.hits.clear()
