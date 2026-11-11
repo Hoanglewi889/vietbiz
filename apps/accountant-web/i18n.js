@@ -1,6 +1,16 @@
 /* UI copy; permissions are always checked by the API. */
 const COPY = {
   vi: {
+    login: "Đăng nhập",
+    logout: "Đăng xuất",
+    loggedIn: "Đã đăng nhập.",
+    loggedOut: "Đã đăng xuất.",
+    loginDemoMode: "Máy chủ đang ở chế độ demo — hãy dùng dữ liệu mẫu.",
+    loginNotReady: "Máy chủ chưa cấu hình đăng nhập (OIDC).",
+    loginFailed: "Đăng nhập không thành công. Hãy thử lại.",
+    loginCancelled: "Đã huỷ đăng nhập.",
+    mfaRequired: "Cần xác thực hai lớp (MFA). Hãy đăng nhập lại với lớp xác thực thứ hai.",
+    tooManyRequests: "Quá nhiều yêu cầu. Hãy đợi một lát rồi thử lại.",
     // UI elements #011 #012 #018 #030
     quickOpen: "Tạo nhanh",
     quickClose: "Đóng menu",
@@ -627,6 +637,16 @@ const COPY = {
     },
   },
   cs: {
+    login: "Přihlásit se",
+    logout: "Odhlásit se",
+    loggedIn: "Přihlášeno.",
+    loggedOut: "Odhlášeno.",
+    loginDemoMode: "Server běží v režimu demo — použijte ukázková data.",
+    loginNotReady: "Server nemá nastavené přihlášení (OIDC).",
+    loginFailed: "Přihlášení se nezdařilo. Zkuste to znovu.",
+    loginCancelled: "Přihlášení bylo zrušeno.",
+    mfaRequired: "Je nutné dvoufázové ověření (MFA). Přihlaste se znovu s druhým faktorem.",
+    tooManyRequests: "Příliš mnoho požadavků. Chvíli počkejte a zkuste to znovu.",
     // UI elements #011 #012 #018 #030
     quickOpen: "Rychle vytvořit",
     quickClose: "Zavřít nabídku",

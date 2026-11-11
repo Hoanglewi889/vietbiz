@@ -25,6 +25,7 @@
     <script src="doc-flag.js" defer></script>
     <script src="qty-stepper.js" defer></script>
     <script src="range-calendar.js" defer></script>
+    <script src="login.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#workspace" data-i18n="skip">Đến nội dung chính</a>
@@ -87,7 +88,9 @@
                 value=""
                 data-i18n="chooseCompany"
               ></option></select></label
-          ><span id="role-badge" class="badge neutral"></span>
+          ><span id="role-badge" class="badge neutral"></span
+          ><button id="login" type="button" class="secondary" data-i18n="login"></button
+          ><button id="logout" type="button" class="secondary" hidden data-i18n="logout"></button>
         </div>
       </section>
       <div id="notice" role="status" aria-live="polite" hidden></div>

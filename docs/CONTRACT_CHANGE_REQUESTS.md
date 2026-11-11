@@ -425,3 +425,22 @@ Counts only; no document data leaves its company. No schema change.
   with `<html data-theme="dark">`, the app has no dark theme yet); `quick-create.*` (#011),
   `doc-flag.*` (#012), `qty-stepper.*` (#018), `range-calendar.*` (#030). Each keeps the
   original's MIT licence line.
+
+## CR-15 · Security hardening: login with MFA, encryption at rest, rate limits, headers
+
+- Requested by: the owner (report of 10.11.2026, gaps 1–5: "tập trung vào các phần này"),
+  2026-11-11 · Implemented in: `claude/security-hardening` · Status: proposed in PR ·
+  Depends on: CR-14 (stacked branch). Details: `docs/SECURITY_HARDENING.md`.
+
+- `GET /auth/config` (public): login settings for the workspace (`mode`, endpoints,
+  `client_id`, `scope`, `mfa_required`, `acr_values`, `ready`); never a client secret.
+- OIDC tokens must show MFA (`amr` contains `mfa` or `acr` in `VIETBIZ_OIDC_MFA_ACR`) unless
+  `VIETBIZ_OIDC_REQUIRE_MFA` is off; otherwise 401 with
+  `WWW-Authenticate: Bearer error="insufficient_user_authentication"`.
+- Originals are sealed (AES-256-GCM, `VBX1` header) on disk and in `bank_import_files`;
+  downloads unchanged for clients (`Content-Disposition: attachment` with RFC 5987 name).
+  No schema change.
+- 429 `Too many requests` with `Retry-After` from the rate limiter; security headers on every
+  response.
+- Web: `login.js` (PKCE login, token in memory, logout), `Authorization: Bearer` instead of
+  `X-User` when signed in; step-up and 429 messages in VI/CS.

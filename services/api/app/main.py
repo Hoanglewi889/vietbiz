@@ -7,7 +7,8 @@ from uuid import uuid4
 from typing import Literal
 import os
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
+from cryptography.exceptions import InvalidTag
 from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -21,7 +22,7 @@ if DEPLOYMENT_ENV not in {'development', 'test'}:
 AUTH_MODE = os.getenv('VIETBIZ_AUTH_MODE', 'oidc').strip().lower()
 if AUTH_MODE not in {'demo', 'oidc'}:
     raise RuntimeError('Unknown authentication mode')
-from .auth import configured_verifier
+from .auth import configured_verifier, login_settings
 VERIFIER = configured_verifier() if AUTH_MODE == 'oidc' else None
 
 ROOT = Path(os.getenv('VIETBIZ_DATA_DIR', './.vietbiz-data')).resolve()
@@ -32,7 +33,16 @@ DB = ROOT / 'vietbiz.sqlite3'
 MAX_BYTES = 10 * 1024 * 1024
 MIMES = {'application/pdf':'.pdf','image/jpeg':'.jpg','image/png':'.png'}
 app = FastAPI(title='VietBiz API — Sprint 10',version='0.10.0',description='LOCAL ONLY. OIDC JWT verification by default; explicit demo mode available.')
+# Hardening (report 10.11.2026, gaps 3 and 4). The last middleware added is the outermost:
+# rate limits innermost, then CORS (Codex review, PR #21: so an allowed origin can read a 429),
+# then security headers outermost, so every answer, a 429 included, carries them.
+from .web_security import Limits, RateLimit, SecurityHeaders, attachment_disposition
+LIMITS = Limits.from_env()
+app.add_middleware(RateLimit, limits=LIMITS)
 app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
+app.add_middleware(SecurityHeaders)
+from .crypto import data_key, document_context, seal, unseal
+data_key()  # fail at start-up, not on the first upload, when the key is missing or malformed
 from .database import connection as conn, require_schema
 require_schema()
 
@@ -65,6 +75,11 @@ class MembershipCreate(BaseModel):
     role:Literal['employee','accountant']
 class ReviewRequest(BaseModel):
     decision:Literal['approve','reject','request_changes']
+
+@app.get('/auth/config')
+def auth_config():
+    """Public login settings for the workspace (no secrets: the web client is public + PKCE)."""
+    return login_settings(AUTH_MODE)
 
 @app.get('/health')
 def health():return {'status':'ok','mode':DEPLOYMENT_ENV,'auth_mode':AUTH_MODE}
@@ -163,7 +178,9 @@ async def upload_document(org_id:str,file:UploadFile=File(...),uid:str=Depends(c
     # PDF parsing is CPU-bound; keep it off the event loop.
     isdoc_fields=await run_in_threadpool(read_isdoc,content) if mime=='application/pdf' else None
     did=str(uuid4()); org_dir=FILES / org_id;org_dir.mkdir(exist_ok=True)
-    target=org_dir / (did+MIMES[mime]); target.write_bytes(content)
+    # Gap 2: the original is sealed (AES-256-GCM, bound to this company and document) before it
+    # touches the disk; the digest and size describe the plain file.
+    target=org_dir / (did+MIMES[mime]); target.write_bytes(seal(content,document_context(org_id,did)))
     digest=sha256(content).hexdigest()
     try:
       with conn() as c:
@@ -198,9 +215,13 @@ def original(org_id:str,doc_id:str,uid:str=Depends(current_user)):
         path=Path(d['storage_path']).resolve()
         if org_root==root or not org_root.is_relative_to(root) or not path.is_relative_to(org_root) or not path.is_file():
             raise HTTPException(404,'Original file missing')
+        try:
+            content=unseal(path.read_bytes(),document_context(org_id,doc_id))
+        except InvalidTag:
+            raise HTTPException(500,'Original cannot be decrypted') from None
         # This records authorized access, not proof that the client received all bytes.
         event(c,org_id,uid,'document.download_requested',doc_id)
-    return FileResponse(path,media_type=d['mime'],filename=d['filename'])
+    return Response(content,media_type=d['mime'],headers={'Content-Disposition':attachment_disposition(d['filename'],'document')})
 @app.post('/v1/organizations/{org_id}/documents/{doc_id}/review')
 def review(org_id:str,doc_id:str,body:ReviewRequest,uid:str=Depends(current_user)):
     with conn() as c:

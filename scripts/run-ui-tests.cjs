@@ -15,6 +15,8 @@ const env = {
   VIETBIZ_DATA_DIR: directory,
   VIETBIZ_DATABASE_URL: "sqlite:///" + path.join(directory, "ui.db"),
   VIETBIZ_UI_URL: `http://127.0.0.1:${port}/workspace/`,
+  // Only puts the mocked identity provider's token origin into the CSP for the login test.
+  VIETBIZ_OIDC_TOKEN_URL: "https://id.example/token",
 };
 const cwd = path.join(root, "services/api");
 
