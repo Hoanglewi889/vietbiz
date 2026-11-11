@@ -112,8 +112,10 @@ def parse_invoice(xml: bytes) -> dict:
     """Map one ISDOC invoice to the CR-1 `fields` shape. Raises NotImportable."""
     if len(xml) > MAX_XML_BYTES:
         raise NotImportable('xml too large')
-    head = xml[:4096].upper()
-    if b'<!DOCTYPE' in head or b'<!ENTITY' in xml.upper():
+    # Security review 11.11.2026: look for a DTD in the whole document, not only its first 4 KB
+    # (a long comment before the root used to push a DOCTYPE past the check).
+    upper = xml.upper()
+    if b'<!DOCTYPE' in upper or b'<!ENTITY' in upper:
         raise NotImportable('dtd or entities are not allowed')
     try:
         root = ET.fromstring(xml)

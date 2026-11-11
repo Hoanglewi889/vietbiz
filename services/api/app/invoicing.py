@@ -503,8 +503,9 @@ def build_router(current_user, authorize, audit):
         with connection() as db:
             authorize(db, uid, org_id, roles)
             invoice = _public(load(db, org_id, invoice_id))
-        if invoice['status'] != 'issued':
-            raise HTTPException(409, 'Only an issued invoice can be exported')
+            if invoice['status'] != 'issued':
+                raise HTTPException(409, 'Only an issued invoice can be exported')
+            audit(db, org_id, uid, 'invoice.exported', None)  # security review 11.11.2026
         return Response(isdoc_xml(invoice), media_type='application/xml', headers={
             'Content-Disposition': f'attachment; filename="faktura-{invoice["number"]}.isdoc"'})
 

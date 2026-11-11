@@ -589,15 +589,18 @@ def build_router(current_user, authorize, audit):
             row = db.execute('SELECT f.media_type, f.content, i.filename FROM bank_import_files f JOIN bank_imports i '
                              'ON i.id=f.import_id WHERE f.import_id=? AND f.organization_id=?',
                              (import_id, org_id)).fetchone()
-        if row is None:
-            raise HTTPException(404, 'Statement not found')
+            if row is None:
+                raise HTTPException(404, 'Statement not found')
+            try:
+                content = unseal(row['content'], statement_context(org_id, import_id))
+            except InvalidTag:
+                raise HTTPException(500, 'Statement cannot be decrypted') from None
+            # Security review 11.11.2026: who took a copy of a statement (account numbers,
+            # counterparties) is logged like a document original is.
+            audit(db, org_id, uid, 'bank.statement_download_requested', None)
         # Codex review, PR #19: header values are Latin-1, so a Czech or Vietnamese name goes in an
         # RFC 5987 `filename*` and the plain `filename` gets an ASCII fallback.
         disposition = attachment_disposition(row['filename'], 'statement')
-        try:
-            content = unseal(row['content'], statement_context(org_id, import_id))
-        except InvalidTag:
-            raise HTTPException(500, 'Statement cannot be decrypted') from None
         return Response(content, media_type=row['media_type'],
                         headers={'Content-Disposition': disposition, 'X-Content-Type-Options': 'nosniff'})
 
