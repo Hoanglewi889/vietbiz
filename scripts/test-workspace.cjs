@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "data-export.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -1126,8 +1126,17 @@ const path = require("node:path");
     );
     await page.locator("#range-clear").click();
     check("The range can be cleared again", (await page.locator("#f-from").inputValue()) === "");
+    // GDPR export: the owner downloads the company's data as one ZIP; others do not see it.
+    const exportDownload = page.waitForEvent("download");
+    await page.locator("#export-data").click();
+    const zip = await exportDownload;
+    check(
+      "The owner can download all company data as a ZIP",
+      /^vietbiz-export-.{8}-\d{4}-\d{2}-\d{2}\.zip$/.test(zip.suggestedFilename()),
+    );
     await page.locator("#demo-role").selectOption({ label: "Kế toán" });
     await page.waitForFunction(() => document.querySelector("#role-badge").textContent === "Kế toán");
+    check("Only the owner sees the data export", await page.locator("#export-data").isHidden());
     check(
       "Quick create follows the role: the accountant cannot upload",
       await page.locator('.u011-it[data-action="upload"]').isHidden(),

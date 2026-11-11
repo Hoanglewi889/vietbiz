@@ -1,6 +1,8 @@
 /* UI copy; permissions are always checked by the API. */
 const COPY = {
   vi: {
+    exportData: "Tải toàn bộ dữ liệu (ZIP)",
+    exportDone: "Đã tạo file xuất dữ liệu của công ty.",
     login: "Đăng nhập",
     logout: "Đăng xuất",
     loggedIn: "Đã đăng nhập.",
@@ -647,6 +649,8 @@ const COPY = {
     },
   },
   cs: {
+    exportData: "Stáhnout všechna data (ZIP)",
+    exportDone: "Export dat firmy je připraven.",
     login: "Přihlásit se",
     logout: "Odhlásit se",
     loggedIn: "Přihlášeno.",

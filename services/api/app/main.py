@@ -273,6 +273,8 @@ app.include_router(build_threshold_router(current_user, authorize))
 from .filing_calendar import build_router as build_calendar_router
 app.include_router(build_calendar_router(current_user, authorize, event))
 app.include_router(build_extraction_router(current_user, authorize, event))
+from .data_export import build_router as build_export_router
+app.include_router(build_export_router(current_user, authorize, event))
 
 # Serve the local demo from the API origin; API authorization is unchanged.
 from fastapi.staticfiles import StaticFiles
