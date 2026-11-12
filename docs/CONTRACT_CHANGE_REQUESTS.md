@@ -513,5 +513,7 @@ Counts only; no document data leaves its company. No schema change.
 - `GET /v1/news`, `GET /v1/news/{id}`: add `source_name` and `sources: [{name, url}]`, main source
   first. `GET /v1/news/sources`: adds `group`; all listed sources are enabled.
 - Legal news keeps requiring an official authority URL. AI drafting stays off (decision A).
+- Reader (`apps/news-web`): shows every source as a link and the outlet name (Codex review,
+  PR #27); checked by `scripts/test-news-web.cjs`, part of `npm run test:ui`.
 - CLI: `news_pipeline.py draft ID --title … --summary … --own-words [--source URL]…`.
 - Decisions recorded in `docs/collaboration/OWNER_DECISIONS_2026-11-12.md`.
