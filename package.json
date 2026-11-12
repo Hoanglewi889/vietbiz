@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.10.0",
   "scripts": {
-    "test:ui": "node scripts/run-ui-tests.cjs"
+    "test:ui": "node scripts/run-ui-tests.cjs && node scripts/test-news-web.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
