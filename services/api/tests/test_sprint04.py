@@ -22,10 +22,13 @@ def test_no_rights_and_no_automatic_publication():
     assert item in [x['id'] for x in TestClient(app).get('/v1/news?q=kinh%20doanh').json()]
     assert item not in [x['id'] for x in TestClient(app).get('/v1/news?q=unrelated-string').json()]
 
-def test_source_endpoint_exposes_disabled_flag():
+def test_source_endpoint_lists_sources_by_group():
+    # Owner decision G (12.11.2026): Czech, Vietnamese and international outlets, headline + link only.
     response=TestClient(app).get('/v1/news/sources')
     assert response.status_code==200
-    assert any(x['id']=='novinky' and x['enabled'] is False for x in response.json())
+    groups={x['group'] for x in response.json()}
+    assert groups=={'cz','vn','intl'}
+    assert all(set(x)=={'id','name','group','enabled'} for x in response.json())
 
 def test_invalid_adapter_output_rejected():
     item=make_article()

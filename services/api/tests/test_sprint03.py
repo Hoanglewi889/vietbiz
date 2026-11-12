@@ -14,7 +14,7 @@ def article(category='law'):
 
 def test_draft_not_public_and_law_requires_primary_source():
     id=article()
-    prepare_editorial_draft(id,'Tin thuế EET thử nghiệm','Bản tóm tắt thử nghiệm do biên tập viên nhập và chưa được xác minh đầy đủ.')
+    prepare_editorial_draft(id,'Tin thuế EET thử nghiệm','Bản tóm tắt thử nghiệm do biên tập viên nhập và chưa được xác minh đầy đủ.',own_words=True)
     client=TestClient(app)
     assert not any(x['id']==id for x in client.get('/v1/news').json())
     with pytest.raises(ValueError):publish_reviewed(id,'Editor',True)
@@ -24,9 +24,9 @@ def test_draft_not_public_and_law_requires_primary_source():
 
 def test_revision_resets_approval():
     id=article('other')
-    prepare_editorial_draft(id,'Tin sự kiện thử nghiệm','Một bản tin thử nghiệm có nội dung đủ dài để kiểm tra chức năng.')
+    prepare_editorial_draft(id,'Tin sự kiện thử nghiệm','Một bản tin thử nghiệm có nội dung đủ dài để kiểm tra chức năng.',own_words=True)
     publish_reviewed(id,'Editor',True)
-    prepare_editorial_draft(id,'Tin sự kiện đã sửa','Một bản tin đã chỉnh sửa cần phải được biên tập viên duyệt lại.')
+    prepare_editorial_draft(id,'Tin sự kiện đã sửa','Một bản tin đã chỉnh sửa cần phải được biên tập viên duyệt lại.',own_words=True)
     assert not any(x['id']==id for x in TestClient(app).get('/v1/news').json())
 
 def test_events_only_visible_after_review_and_city_filter():

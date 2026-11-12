@@ -496,3 +496,22 @@ Counts only; no document data leaves its company. No schema change.
 - 2027 (social 5 281, secondary 1 660, health 3 488, flat tax 9 662 / 16 745 / 27 139) stays
   `reported`: approved by government decree (21.9.2026) per secondary sources; to switch to
   `official` once ČSSZ/VZP publish the figures for 2027.
+
+## CR-20 · News from Czech, Vietnamese and international outlets, written again (decision G)
+
+- Requested by: the owner (decision G, 12.11.2026: "lấy nguồn tự do rồi viết lại Seznam, cả tin
+  quốc tế, Việt Nam chính thống") · Implemented in: `claude/news-sources` · Status: proposed in PR ·
+  Depends on: #26.
+- Sources (`app/news.py` `SOURCES`, feeds checked 12.11.2026, each with a `group`): `cz` Novinky,
+  Seznam Zprávy, iROZHLAS, ČT24; `vn` VnExpress, Tuổi Trẻ, Vietnam+ (TTXVN); `intl` Radio Prague
+  International. Intake stays headline + link + date; the headline is never shown to readers.
+- `prepare_editorial_draft(..., own_words=True, extra_sources=[...], editor=...)`: a human
+  editor must confirm own words; a draft repeating six words in a row of the source headline (or
+  the whole of a shorter one, four words minimum) is refused (`copies_source`); up to four
+  further https sources, kept in `news_item_links` (migration `0014_news_links`); a `drafted`
+  entry in `news_review_log`.
+- `GET /v1/news`, `GET /v1/news/{id}`: add `source_name` and `sources: [{name, url}]`, main source
+  first. `GET /v1/news/sources`: adds `group`; all listed sources are enabled.
+- Legal news keeps requiring an official authority URL. AI drafting stays off (decision A).
+- CLI: `news_pipeline.py draft ID --title … --summary … --own-words [--source URL]…`.
+- Decisions recorded in `docs/collaboration/OWNER_DECISIONS_2026-11-12.md`.
