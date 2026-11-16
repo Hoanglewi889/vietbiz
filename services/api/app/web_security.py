@@ -89,6 +89,8 @@ SENSITIVE = [
     ('POST', re.compile(r'^/v1/organizations/[^/]+/bank/imports$')),
     ('POST', re.compile(r'^/v1/organizations$')),
     ('GET', re.compile(r'^/v1/organizations/[^/]+/export$')),
+    # Each check asks three public registers; ARES forbids mass automated querying.
+    ('GET', re.compile(r'^/v1/organizations/[^/]+/registry-check/[^/]+$')),
 ]
 
 

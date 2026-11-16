@@ -1255,6 +1255,7 @@ function translate() {
   if (typeof renderLegal === "function") renderLegal();
   if (typeof renderPortfolio === "function") renderPortfolio();
   if (typeof renderSuppliers === "function") renderSuppliers();
+  if (typeof renderPartnerCheck === "function") renderPartnerCheck();
   if (typeof renderGoods === "function") renderGoods();
   if (typeof renderBank === "function" && !$("bank-tab").hidden) renderBank();
   if (typeof renderStaff === "function" && staffState.period) renderStaff();

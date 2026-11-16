@@ -517,3 +517,26 @@ Counts only; no document data leaves its company. No schema change.
   PR #27); checked by `scripts/test-news-web.cjs`, part of `npm run test:ui`.
 - CLI: `news_pipeline.py draft ID --title … --summary … --own-words [--source URL]…`.
 - Decisions recorded in `docs/collaboration/OWNER_DECISIONS_2026-11-12.md`.
+
+## CR-21 · Partner check: ARES, register of bankrupts, VAT register (decision H)
+
+- Requested by: the owner (decision H, 12.11.2026: "nên làm — lợi lớn, rủi ro nhỏ") ·
+  Implemented in: `claude/registry-check` · Status: proposed in PR · Depends on: #27.
+- `GET /v1/organizations/{org}/registry-check/{ico}[?account=…]` (owner, accountant; sensitive
+  rate limit; audited `registry.checked`; IČO with mod-11 check digit, else 422) →
+  `company` (ARES `ekonomicke-subjekty/{ico}`: name, address, DIČ, founded/ended, source
+  register states), `insolvency` (ARES `ekonomicke-subjekty-ceu/{ico}`, asked only when
+  `stavZdrojeCeu` is `AKTIVNI`), `vat` (ADIS `rozhraniCRPDPH` `StatusNespolehlivyPlatce`:
+  unreliable yes/no, published accounts), `account.published` (the given account among the
+  published ones; leading zeros ignored), `warnings` (codes), `checked_at`.
+- Each part has `status`: `ok`, `not_found`, `not_registered` (no DIČ) or `unavailable`. A
+  register that does not answer is never reported as clear; incomplete answers are not cached,
+  complete ones are kept in memory for 10 minutes. Only the IČO / DIČ leave VietBiz. In tests the
+  network is never used (`VIETBIZ_ENV=test`); a fetcher is injected.
+- Endpoints configurable: `VIETBIZ_ARES_URL`, `VIETBIZ_ADIS_URL`. **To verify against the live
+  services before production** (not reachable from the development sandbox): the CEÚ response
+  wrapper, the `StavZdroje` codelist value `AKTIVNI`, and the ADIS endpoint URL; the ADIS
+  namespace and `statusPlatceDPH` attributes match a published sample answer.
+- Web: "Kiểm tra đối tác / Prověření partnera" in the documents view (`partner-check.js`), IČO +
+  optional account, warnings in VI/CS (§ 109 zákona o DPH: liability for VAT when paying an
+  unreliable payer or to an unpublished account — "ask the accountant", no legal conclusion).
