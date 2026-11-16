@@ -28,6 +28,7 @@
     <script src="range-calendar.js" defer></script>
     <script src="empty-folder.js" defer></script>
     <script src="data-export.js" defer></script>
+    <script src="partner-check.js" defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -258,6 +259,16 @@
             <h3 data-i18n="categoriesTitle"></h3>
             <div id="category-bars" class="supplier-list"></div>
           </div>
+        </section>
+        <section id="partner-check" class="partner-check" hidden aria-labelledby="partner-title">
+          <h3 id="partner-title" data-i18n="partnerCheckTitle"></h3>
+          <p class="muted small" data-i18n="partnerCheckHint"></p>
+          <form id="partner-form" class="partner-form">
+            <label><span data-i18n="partnerIco"></span><input id="partner-ico" inputmode="numeric" maxlength="10" autocomplete="off" required /></label>
+            <label><span data-i18n="partnerAccountOptional"></span><input id="partner-account" maxlength="40" autocomplete="off" placeholder="19-123457/0800" /></label>
+            <button id="partner-submit" type="submit" data-i18n="partnerCheckBtn"></button>
+          </form>
+          <div id="partner-result" class="partner-result" aria-live="polite"></div>
         </section>
         <section id="goods-panel" class="supplier-panel" hidden aria-labelledby="goods-title">
           <div class="supplier-col">

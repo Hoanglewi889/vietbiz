@@ -65,11 +65,12 @@ jobs:
       - run: python -m pytest -q --junitxml=postgres-results.xml
       - name: PostgreSQL backup and restore rehearsal
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-16
-          /usr/lib/postgresql/16/bin/pg_dump -h localhost -U vietbiz -d vietbiz_test -Fc -f /tmp/vietbiz.dump
-          /usr/lib/postgresql/16/bin/createdb -h localhost -U vietbiz vietbiz_restore
-          /usr/lib/postgresql/16/bin/pg_restore -h localhost -U vietbiz -d vietbiz_restore --exit-on-error /tmp/vietbiz.dump
+          # Client tools from the same image as the server: ubuntu-latest (26.04) no longer ships
+          # postgresql-client-16, and a newer pg_dump would not prove a 16 restore.
+          pg() { docker run --rm --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 "$@"; }
+          pg pg_dump -h localhost -U vietbiz -d vietbiz_test -Fc -f /tmp/vietbiz.dump
+          pg createdb -h localhost -U vietbiz vietbiz_restore
+          pg pg_restore -h localhost -U vietbiz -d vietbiz_restore --exit-on-error /tmp/vietbiz.dump
           python scripts/verify_restore.py
       - uses: actions/upload-artifact@v4
         if: always()

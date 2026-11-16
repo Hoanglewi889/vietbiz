@@ -8,7 +8,7 @@ work from these; change them only with a new owner decision.
 | D | Merge order of the open PRs | Only the owner merges, in the report's order (#1, #18, then #2 → #26) | Nothing; Claude and Codex never merge |
 | A | AI (Claude API) to read invoice photos and translate news | Later, after a DPA and encryption are in place | No AI calls; `draft_with_adapter` stays behind `rights_confirmed`; news is written by people |
 | B | Tax reports only as drafts? | Yes — drafts only; the accountant signs | Exports stay marked as drafts for the accountant |
-| H | ARES / unreliable VAT payer / insolvency register lookups | Do it — large benefit, small risk (IČO/DIČ leave the app to public state registers) | Next PR after the news change |
+| H | ARES / unreliable VAT payer / insolvency register lookups | Do it — large benefit, small risk (IČO/DIČ leave the app to public state registers) | CR-21 (`claude/registry-check`): partner check by IČO, owner and accountant |
 | C | Payment gateway | Later; QR Platba is enough for the first stage | Nothing |
 | E | Paid e-mail sending service | Later, after real login | Nothing |
 | F | Datová schránka with real accounts | After the security stage | Nothing |

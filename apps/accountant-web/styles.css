@@ -1752,3 +1752,41 @@ label.check {
 .coverage-cell.missing { background: #fbe3dd; color: var(--danger); }
 .payout-summary { font-weight: 600; }
 .bank-actions select { max-width: 100%; }
+
+/* Partner check (registry-check) */
+.partner-check {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.partner-check[hidden] {
+  display: none;
+}
+.partner-check h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.partner-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin: 10px 0;
+}
+.partner-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.partner-result h4 {
+  margin: 8px 0 4px;
+}
+.partner-line {
+  margin: 2px 0;
+}
+.partner-line.bad,
+.partner-warnings {
+  color: var(--danger);
+}
+.partner-ok {
+  color: var(--ok, inherit);
+}
