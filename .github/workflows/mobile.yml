@@ -41,6 +41,10 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          # The default list still names the removed 'tools' package, which fails on the
+          # current image; Gradle installs the platform it needs itself.
+          packages: platform-tools
       - run: npm ci
       - name: Bundle checks (fixed https API, app redirect, CSP)
         run: npm test
