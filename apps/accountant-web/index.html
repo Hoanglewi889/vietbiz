@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="qty-stepper.css" />
     <link rel="stylesheet" href="range-calendar.css" />
     <link rel="stylesheet" href="empty-folder.css" />
+    <script src="runtime.js" defer></script>
     <script src="i18n.js" defer></script>
     <script src="app.js" defer></script>
     <script src="invoices.js" defer></script>
@@ -47,6 +48,19 @@
         </select></label
       >
     </header>
+    <section id="native-login" class="native-login" hidden aria-labelledby="native-login-title">
+      <div class="native-login-card">
+        <span class="brand-mark native-login-mark" aria-hidden="true">V</span>
+        <h1 id="native-login-title" data-i18n="nativeLoginTitle"></h1>
+        <p class="muted" data-i18n="nativeLoginText"></p>
+        <button id="native-login-button" type="button" class="primary" data-i18n="nativeLoginButton"></button>
+        <p class="muted small" data-i18n="nativeLoginNote"></p>
+        <div class="native-login-lang" role="group" aria-label="Language">
+          <button type="button" class="secondary" data-lang="vi">Tiếng Việt</button
+          ><button type="button" class="secondary" data-lang="cs">Čeština</button>
+        </div>
+      </div>
+    </section>
     <div class="demo-banner">
       <span class="dot"></span><span data-i18n="demoNotice"></span
       ><span class="sprint">SPRINT 10</span>

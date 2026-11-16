@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "data-export.js", "partner-check.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -1313,6 +1313,81 @@ const path = require("node:path");
     await login.waitForFunction(() => document.querySelector("#notice").textContent.includes("không thành công"));
     check("A returned code with a foreign state is refused", tokenForm === null && !login.url().includes("code="));
     await login.close();
+    // Mobile app (apps/mobile): the same workspace inside Capacitor. Login opens the system
+    // browser and comes back through the app's URL scheme (RFC 8252); native plugins are mocked.
+    const app = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    app.on("pageerror", (e) => errors.push(e.message));
+    app.on("console", (m) => {
+      if (m.text().includes("Content Security Policy")) cspViolations.push(m.text());
+    });
+    const appRedirect = "cz.vietbiz.app:/oauth/callback";
+    await app.addInitScript(([api, redirectUri]) => {
+      window.VIETBIZ_RUNTIME = { native: true, api, redirectUri };
+      window.__browser = [];
+      window.Capacitor = {
+        isNativePlatform: () => true,
+        Plugins: {
+          Browser: { open: async ({ url }) => window.__browser.push(url), close: async () => window.__browser.push("closed") },
+          App: { addListener: (event, fn) => { if (event === "appUrlOpen") window.__appUrlOpen = fn; } },
+        },
+      };
+    }, [new URL(workspace).origin, appRedirect]);
+    tokenForm = null;
+    bearer = null;
+    for (const [pattern, handler] of [
+      ["**/auth/config", (r) => r.fulfill({ json: settings })],
+      ["**/health", (r) => r.fulfill({ json: { status: "ok", mode: "test", auth_mode: "oidc" } })],
+      ["**/v1/organizations", (r) => { bearer = r.request().headers()["authorization"] || null; return r.fulfill({ json: [] }); }],
+      ["https://id.example/token", (r) => {
+        tokenForm = new URLSearchParams(r.request().postData());
+        return r.fulfill({ json: { access_token: "synthetic-app-token", token_type: "Bearer" }, headers: { "Access-Control-Allow-Origin": "*" } });
+      }],
+    ]) await app.route(pattern, handler);
+    await app.goto(workspace);
+    await app.locator("#native-login").waitFor();
+    check(
+      "The app opens on its own login screen, without demo or connection controls",
+      (await app.locator("#native-login-button").isVisible()) && (await app.locator("#demo").isHidden()) &&
+        (await app.locator(".advanced-connection").isHidden()),
+    );
+    await app.locator("#native-login [data-lang=cs]").click();
+    check("The app login screen follows the language", (await app.locator("#native-login-button").innerText()).includes("e-mailem"));
+    await app.locator("#native-login [data-lang=vi]").click();
+    await app.locator("#native-login-button").click();
+    await app.waitForFunction(() => window.__browser.length === 1);
+    const opened = new URL(await app.evaluate(() => window.__browser[0]));
+    check(
+      "App login opens the provider in the system browser with PKCE and the app's own redirect",
+      opened.origin === "https://id.example" && opened.searchParams.get("redirect_uri") === appRedirect &&
+        opened.searchParams.get("code_challenge_method") === "S256" && app.url().startsWith(workspace),
+    );
+    // A return with someone else's state is refused and nothing is exchanged.
+    await app.evaluate((u) => window.__appUrlOpen({ url: u }), appRedirect + "?code=forged&state=not-ours");
+    await app.waitForFunction(() => document.querySelector("#notice").textContent.includes("không thành công"));
+    check("The app refuses a returned code with a foreign state", tokenForm === null);
+    check(
+      "The login error is shown above the app's login screen",
+      await app.evaluate(() => {
+        const r = document.querySelector("#notice").getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return r.height > 0 && Boolean(top && top.closest("#notice"));
+      }),
+    );
+    // Start again and come back with the right state.
+    await app.locator("#native-login-button").click();
+    await app.waitForFunction(() => window.__browser.filter((u) => u.startsWith("https://")).length === 2);
+    const again = new URL(await app.evaluate(() => window.__browser.filter((u) => u.startsWith("https://"))[1]));
+    await app.evaluate((u) => window.__appUrlOpen({ url: u }), appRedirect + "?code=synthetic-code&state=" + again.searchParams.get("state"));
+    await app.waitForFunction(() => document.querySelector("#notice").textContent.includes("Đã đăng nhập"));
+    check(
+      "The app exchanges the code with its own redirect, closes the browser and calls the API with the token",
+      tokenForm.get("redirect_uri") === appRedirect && tokenForm.get("code") === "synthetic-code" &&
+        !tokenForm.has("client_secret") && bearer === "Bearer synthetic-app-token" &&
+        (await app.evaluate(() => window.__browser.includes("closed"))) && (await app.locator("#native-login").isHidden()),
+    );
+    await app.locator("#logout").click();
+    check("Logging out of the app shows the login screen again", await app.locator("#native-login").isVisible());
+    await app.close();
     if (cspViolations.length) console.error("CSP", [...new Set(cspViolations)]);
     check("The workspace runs under its Content-Security-Policy without violations", cspViolations.length === 0);
     check("No browser JavaScript errors", errors.length === 0);

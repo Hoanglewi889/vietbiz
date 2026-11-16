@@ -1790,3 +1790,59 @@ label.check {
 .partner-ok {
   color: var(--ok, inherit);
 }
+
+/* Mobile app (apps/mobile): login screen, no demo or connection controls */
+.native-login {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background: var(--paper, #f5f6ef);
+}
+.native-login[hidden] {
+  display: none;
+}
+.native-login-card {
+  width: min(100%, 380px);
+  display: grid;
+  gap: 14px;
+  text-align: center;
+  justify-items: center;
+}
+.native-login-card h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+}
+.native-login-card .primary {
+  width: 100%;
+  min-height: 52px;
+  font-size: 17px;
+}
+.native-login-mark {
+  width: 56px;
+  height: 56px;
+  font-size: 26px;
+}
+.native-login-lang {
+  display: flex;
+  gap: 8px;
+}
+.native-app #demo,
+.native-app .advanced-connection,
+.native-app #demo-role-label {
+  display: none !important;
+}
+/* Codex review, PR #29: messages (e.g. a failed login) must show above the login screen. */
+.native-app #notice:not([hidden]) {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  margin: 0;
+}
+.native-app .topbar {
+  padding-top: max(12px, env(safe-area-inset-top));
+}

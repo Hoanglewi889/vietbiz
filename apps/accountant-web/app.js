@@ -100,6 +100,13 @@ async function run(fn, el) {
   }
 }
 function localApi() {
+  // The mobile app talks to one API fixed at build time (https only).
+  if (RUNTIME.api) {
+    const fixed = new URL(RUNTIME.api);
+    if (fixed.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(fixed.hostname))
+      throw { messageKey: "localOnly" };
+    return fixed.origin;
+  }
   const u = new URL($("api").value);
   if (
     !["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) ||

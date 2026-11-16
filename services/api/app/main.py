@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Literal
 import os
+import re
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
 from fastapi.responses import Response
 from cryptography.exceptions import InvalidTag
@@ -39,7 +40,15 @@ app = FastAPI(title='VietBiz API — Sprint 10',version='0.10.0',description='LO
 from .web_security import Limits, RateLimit, SecurityHeaders, attachment_disposition
 LIMITS = Limits.from_env()
 app.add_middleware(RateLimit, limits=LIMITS, auth_mode=AUTH_MODE)
-app.add_middleware(CORSMiddleware,allow_origins=['http://localhost:3000','http://127.0.0.1:3000'],allow_methods=['*'],allow_headers=['*'])
+# The mobile app's web view has its own origin: capacitor://localhost (iOS) and https://localhost
+# (Android). Add them, or other exact origins, with VIETBIZ_CORS_ORIGINS (comma-separated).
+def cors_origins():
+    extra=[o.strip() for o in os.getenv('VIETBIZ_CORS_ORIGINS','').split(',') if o.strip()]
+    for origin in extra:
+        if origin=='*' or not re.fullmatch(r'(https|capacitor|http)://[A-Za-z0-9.\-]+(:\d+)?',origin):
+            raise RuntimeError(f'VIETBIZ_CORS_ORIGINS: {origin!r} is not an exact origin')
+    return ['http://localhost:3000','http://127.0.0.1:3000',*extra]
+app.add_middleware(CORSMiddleware,allow_origins=cors_origins(),allow_methods=['*'],allow_headers=['*'])
 app.add_middleware(SecurityHeaders)
 from .crypto import document_context, keyring, seal, unseal
 keyring()  # fail at start-up, not on the first upload, when the key is missing or malformed
