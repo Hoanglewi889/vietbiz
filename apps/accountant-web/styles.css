@@ -1834,6 +1834,15 @@ label.check {
 .native-app #demo-role-label {
   display: none !important;
 }
+/* Codex review, PR #29: messages (e.g. a failed login) must show above the login screen. */
+.native-app #notice:not([hidden]) {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  margin: 0;
+}
 .native-app .topbar {
   padding-top: max(12px, env(safe-area-inset-top));
 }

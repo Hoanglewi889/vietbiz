@@ -1365,6 +1365,14 @@ const path = require("node:path");
     await app.evaluate((u) => window.__appUrlOpen({ url: u }), appRedirect + "?code=forged&state=not-ours");
     await app.waitForFunction(() => document.querySelector("#notice").textContent.includes("không thành công"));
     check("The app refuses a returned code with a foreign state", tokenForm === null);
+    check(
+      "The login error is shown above the app's login screen",
+      await app.evaluate(() => {
+        const r = document.querySelector("#notice").getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return r.height > 0 && Boolean(top && top.closest("#notice"));
+      }),
+    );
     // Start again and come back with the right state.
     await app.locator("#native-login-button").click();
     await app.waitForFunction(() => window.__browser.filter((u) => u.startsWith("https://")).length === 2);
