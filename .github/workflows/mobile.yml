@@ -1,0 +1,75 @@
+name: VietBiz Mobile
+# Builds the Capacitor app (apps/mobile) from the accountant-web workspace. Android on every pull
+# request that touches the app or the workspace; iOS only on demand (macOS minutes cost more).
+# No signing material here: release builds are signed by the owner (docs/mobile/STORE_RELEASE.md).
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'apps/accountant-web/**'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: Also build iOS (simulator, unsigned)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  # Placeholders for a build check; the owner's test server and identity provider replace them.
+  VIETBIZ_API_URL: https://api.vietbiz.example
+  VIETBIZ_OIDC_ORIGIN: https://id.vietbiz.example
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - name: Bundle checks (fixed https API, app redirect, CSP)
+        run: npm test
+      - run: npm run build:web && npx cap sync android
+      - name: Debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew --no-daemon assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vietbiz-android-debug
+          path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+  ios:
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - run: npm run build:web && npx cap sync ios
+      - name: Simulator build, unsigned
+        run: >
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build

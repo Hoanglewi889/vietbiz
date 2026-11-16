@@ -12,7 +12,8 @@ async function pkceChallenge(verifier) {
   return b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
 }
 function loginRedirectUri() {
-  return location.origin + location.pathname;
+  // The app comes back through its own URL scheme; the browser to the page itself.
+  return RUNTIME.redirectUri || location.origin + location.pathname;
 }
 async function loginSettings(api) {
   const r = await fetch(api + "/auth/config", { credentials: "omit", redirect: "error" });
@@ -44,16 +45,21 @@ async function startLogin() {
   };
   if (settings.acr_values) params.acr_values = settings.acr_values;
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  location.assign(url.toString());
+  // In the app the provider's page opens in the system browser, never in the app's own web
+  // view, so the app never sees the email code or the provider's cookies (RFC 8252).
+  if (nativeApp()) await nativePlugin("Browser").open({ url: url.toString() });
+  else location.assign(url.toString());
 }
 // Back from the provider with ?code=…&state=…: check the state, swap the code for a token.
-async function finishLogin() {
-  const query = new URLSearchParams(location.search),
+async function finishLogin(returnUrl) {
+  // returnUrl: the app's own URL the system browser hands back (cz.vietbiz.app:/oauth/callback?…).
+  const query = new URLSearchParams(returnUrl ? new URL(returnUrl).search : location.search),
     code = query.get("code"),
     returned = query.get("state"),
     failed = query.get("error");
   if (!code && !failed) return false;
-  history.replaceState(null, "", loginRedirectUri());
+  if (returnUrl) nativePlugin("Browser").close?.().catch?.(() => {});
+  else history.replaceState(null, "", loginRedirectUri());
   let login = null;
   try {
     login = JSON.parse(sessionStorage.getItem(LOGIN_KEY) || "null");
@@ -97,6 +103,7 @@ async function connectSignedIn() {
   if (health.auth_mode !== "oidc") throw { messageKey: "loginDemoMode" };
   $("login").hidden = true;
   $("logout").hidden = false;
+  showNativeLogin(false);
   await loadCompanies();
   notice(t("loggedIn"));
 }
@@ -109,13 +116,31 @@ function logout() {
   renderOrgOptions();
   $("login").hidden = false;
   $("logout").hidden = true;
+  showNativeLogin(true);
   notice(t("loggedOut"));
   if (url) {
     const target = new URL(url);
     target.searchParams.set("post_logout_redirect_uri", loginRedirectUri());
-    location.assign(target.toString());
+    if (nativeApp()) nativePlugin("Browser").open({ url: target.toString() });
+    else location.assign(target.toString());
   }
+}
+// The app shows its own login screen until a token is in memory.
+function showNativeLogin(show) {
+  $("native-login").hidden = !(nativeApp() && show);
 }
 $("login").onclick = () => run(startLogin, $("login"));
 $("logout").onclick = () => logout();
-run(finishLogin);
+$("native-login-button").onclick = () => run(startLogin, $("native-login-button"));
+document.querySelectorAll("#native-login [data-lang]").forEach((b) => {
+  b.onclick = () => {
+    $("language").value = b.dataset.lang;
+    $("language").onchange();
+  };
+});
+if (nativeApp()) {
+  showNativeLogin(true);
+  nativePlugin("App").addListener("appUrlOpen", ({ url }) => {
+    if (url && RUNTIME.redirectUri && url.startsWith(RUNTIME.redirectUri)) run(() => finishLogin(url));
+  });
+} else run(finishLogin);

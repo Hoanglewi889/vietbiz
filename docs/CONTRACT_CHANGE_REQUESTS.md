@@ -540,3 +540,27 @@ Counts only; no document data leaves its company. No schema change.
 - Web: "Kiểm tra đối tác / Prověření partnera" in the documents view (`partner-check.js`), IČO +
   optional account, warnings in VI/CS (§ 109 zákona o DPH: liability for VAT when paying an
   unreliable payer or to an unpublished account — "ask the accountant", no legal conclusion).
+
+## CR-22 · Mobile app (iOS / Android) with email login, internal testing first
+
+- Requested by: the owner (16.11.2026: "build app tiếp tục với login … lên App Store và CH Play";
+  choices: Capacitor around the web workspace, email + one-time code via OIDC, developer accounts
+  not yet registered, internal testing first) · Implemented in: `claude/mobile-app` · Status:
+  proposed in PR · Depends on: #28.
+- `apps/mobile`: Capacitor 8.6 (`cz.vietbiz.app`, provisional), Android target SDK 36, iOS 15+;
+  `npm run build:web` copies the workspace and writes `config.js` (fixed https API, app redirect),
+  a CSP `<meta>` and `viewport-fit=cover`; icons and splash screens from the VietBiz mark;
+  Android: login intent filter, no backup of app data, no cleartext traffic, release signing from
+  `keystore.properties` / environment (never in the repository); iOS: URL scheme, camera and
+  photo purpose strings, export-compliance flag.
+- Workspace: `runtime.js` (`RUNTIME`, `nativeApp()`, `nativePlugin()`); `localApi()` uses the
+  fixed API in the app; `login.js` opens the provider with the Browser plugin and finishes on
+  `appUrlOpen` (state, PKCE and 10-minute expiry unchanged); a full-screen login screen in VI/CS;
+  demo and connection controls hidden in the app.
+- API: `VIETBIZ_CORS_ORIGINS` adds exact origins (`capacitor://localhost`, `https://localhost`);
+  wildcards and non-origins refuse to start.
+- CI: `.github/workflows/mobile.yml` — Android debug APK on pull requests touching the app or the
+  workspace; iOS simulator build on demand.
+- Docs: `docs/mobile/STORE_RELEASE.md` (owner steps, identity provider, signing, internal testing,
+  gaps before a public release: in-app account deletion, privacy policy URL, production server,
+  phone UI per the design), `docs/mobile/STORE_LISTING.md` (VI/CS/EN texts).

@@ -1,0 +1,8 @@
+node_modules/
+www/
+# Signing material never goes into the repository.
+*.keystore
+*.jks
+android/keystore.properties
+*.p12
+*.mobileprovision
