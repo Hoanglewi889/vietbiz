@@ -220,7 +220,9 @@ def check(ico: str, account: str | None = None) -> dict:
             vat = {'status': 'unavailable'}
         result = {'ico': ico, 'checked_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
                   'company': company, 'insolvency': insolvency, 'vat': vat}
-        if company['status'] != 'unavailable' and vat['status'] != 'unavailable':
+        # Codex review, PR #28: any part that did not answer (insolvency included) keeps the
+        # answer out of the cache, so the next check asks again.
+        if all(part['status'] != 'unavailable' for part in (company, insolvency, vat)):
             with _lock:
                 if len(_cache) > 5000:
                     _cache.clear()

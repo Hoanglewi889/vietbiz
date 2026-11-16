@@ -150,6 +150,22 @@ def test_a_register_that_does_not_answer_is_never_all_clear():
     assert {result[p]['status'] for p in ('company', 'insolvency', 'vat')} == {'unavailable'}
 
 
+def test_a_bankrupts_register_that_did_not_answer_is_asked_again():
+    class CeuDown(Registers):
+        def __call__(self, url, data, headers):
+            if '/ekonomicke-subjekty-ceu/' in url:
+                self.calls.append(url)
+                raise rc.Unavailable('down')
+            return super().__call__(url, data, headers)
+    fake = CeuDown()
+    rc.use_fetcher(fake)
+    first = rc.check(BANKRUPT)
+    assert first['insolvency'] == {'status': 'unavailable', 'listed': True}
+    assert 'register_unavailable' in first['warnings'] and 'insolvency' in first['warnings']
+    rc.check(BANKRUPT)
+    assert len([u for u in fake.calls if '/ekonomicke-subjekty-ceu/' in u]) == 2
+
+
 def test_answers_are_cached_for_a_while(registers):
     rc.check(PAYER)
     count = len(registers.calls)
