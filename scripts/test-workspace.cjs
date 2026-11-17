@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -1334,10 +1334,44 @@ const path = require("node:path");
     }, [new URL(workspace).origin, appRedirect]);
     tokenForm = null;
     bearer = null;
+    const phoneCalls = [];
     for (const [pattern, handler] of [
       ["**/auth/config", (r) => r.fulfill({ json: settings })],
       ["**/health", (r) => r.fulfill({ json: { status: "ok", mode: "test", auth_mode: "oidc" } })],
-      ["**/v1/organizations", (r) => { bearer = r.request().headers()["authorization"] || null; return r.fulfill({ json: [] }); }],
+      ["**/v1/organizations", (r) => {
+        bearer = r.request().headers()["authorization"] || null;
+        return r.fulfill({ json: [{ id: "org-phone", name: "Synteticka Potraviny s.r.o.", role: "owner" }] });
+      }],
+      ["**/v1/portfolio", (r) => r.fulfill({ json: { as_of_date: "2026-11-17", items: [{ organization_id: "org-phone", name: "Synteticka Potraviny s.r.o.", role: "owner" }] } })],
+      ["**/v1/deadlines?*", (r) => r.fulfill({ json: { items: [], profiles_missing: [] } })],
+      // The owner's phone screens read these; synthetic answers only.
+      ["**/v1/organizations/org-phone/**", (r) => {
+        const path = new URL(r.request().url()).pathname.replace("/v1/organizations/org-phone", "");
+        phoneCalls.push(path);
+        const month = new URL(r.request().url()).searchParams.get("month") || "2026-11";
+        const answers = {
+          "/reports/monthly": { month, entries: 2, findings: [], basis: "cash", is_tax_return: false,
+            totals: { CZK: { income: "12500.50", expense: "3208.00", result: "9292.50",
+              income_by_category: { sales: "12500.50" }, expense_by_category: { goods: "3208.00" },
+              by_method: { cash: { income: "12500.50", expense: "0" }, card: { income: "0", expense: "0" }, bank: { income: "0", expense: "3208.00" } } } },
+            unrecorded_invoices: [{ document_id: "d1", filename: "doklad.pdf", supplier_name: "Velkoobchod Ukázka s.r.o.", total: "3208.00", currency: "CZK" }] },
+          "/cashbook": { month, findings: [], categories: { income: ["sales"], expense: ["goods"] },
+            totals: { CZK: { income: "12500.50", expense: "3208.00", result: "9292.50",
+              income_by_category: { sales: "12500.50" }, expense_by_category: { goods: "3208.00" },
+              by_method: { cash: { income: "12500.50", expense: "0" }, card: { income: "0", expense: "0" }, bank: { income: "0", expense: "3208.00" } } } },
+            items: [
+            { id: "c1", kind: "income", category: "sales", method: "cash", amount: "12500.50", currency: "CZK", entry_date: month + "-02", voided: false },
+            { id: "c2", kind: "expense", category: "goods", method: "bank", amount: "3208.00", currency: "CZK", entry_date: month + "-03", counterparty: "Velkoobchod Ukázka", voided: false }] },
+          "/tasks/summary": { by_status: { NEW: 0, IN_PROGRESS: 0, WAITING_CLIENT: 1, DONE: 0, CANCELLED: 0 }, overdue: 0 },
+          "/deadlines": { profile_missing: false, items: [{ code: "vat_return", period: "2026-11", due_date: "2026-12-28", amount: null }] },
+        };
+        if (path === "/tasks" && new URL(r.request().url()).searchParams.get("status") === "WAITING_CLIENT")
+          return r.fulfill({ json: { items: [{ id: "t1", title: "Thiếu DIČ người bán", status: "WAITING_CLIENT" }], next_cursor: null } });
+        if (answers[path]) return r.fulfill({ json: answers[path] });
+        if (path === "/tasks" || path === "/documents") return r.fulfill({ json: { items: [], next_cursor: null } });
+        // Everything else the workspace loads is not part of this check.
+        return r.fulfill({ status: 404, json: { detail: "Not part of the phone check" } });
+      }],
       ["https://id.example/token", (r) => {
         tokenForm = new URLSearchParams(r.request().postData());
         return r.fulfill({ json: { access_token: "synthetic-app-token", token_type: "Bearer" }, headers: { "Access-Control-Allow-Origin": "*" } });
@@ -1378,12 +1412,49 @@ const path = require("node:path");
     await app.waitForFunction(() => window.__browser.filter((u) => u.startsWith("https://")).length === 2);
     const again = new URL(await app.evaluate(() => window.__browser.filter((u) => u.startsWith("https://"))[1]));
     await app.evaluate((u) => window.__appUrlOpen({ url: u }), appRedirect + "?code=synthetic-code&state=" + again.searchParams.get("state"));
-    await app.waitForFunction(() => document.querySelector("#notice").textContent.includes("Đã đăng nhập"));
+    // Signed in: the login screen goes away (the notice then moves on to the company).
+    await app.locator("#native-login").waitFor({ state: "hidden" });
     check(
       "The app exchanges the code with its own redirect, closes the browser and calls the API with the token",
       tokenForm.get("redirect_uri") === appRedirect && tokenForm.get("code") === "synthetic-code" &&
         !tokenForm.has("client_secret") && bearer === "Bearer synthetic-app-token" &&
         (await app.evaluate(() => window.__browser.includes("closed"))) && (await app.locator("#native-login").isHidden()),
+    );
+    // The owner's phone home (design: OwnerHome): money this month, capture, to-do, recent lines.
+    await app.waitForSelector("#home-view:not([hidden]) #phone-todo .phone-todo");
+    const home = await app.locator("#home-view").innerText();
+    check(
+      "The owner lands on the phone home with this month's money",
+      home.includes("Synteticka Potraviny s.r.o.") && home.includes("Còn lại tháng") &&
+        /9[\s.  ]?292,50/.test(home) && home.includes("Chụp hóa đơn"),
+    );
+    check(
+      "The phone home lists what needs the owner and the latest cash book lines",
+      home.includes("1 hóa đơn đã duyệt chưa ghi thanh toán") && home.includes("Kế toán hỏi: Thiếu DIČ người bán") &&
+        home.includes("Velkoobchod Ukázka · Chuyển khoản"),
+    );
+    check(
+      "The desktop tabs and metrics give way to the bottom bar",
+      (await app.locator(".workspace-tabs").isHidden()) && (await app.locator(".metrics").isHidden()) &&
+        (await app.locator("#phone-nav").isVisible()) &&
+        (await app.locator("#phone-nav-home").getAttribute("aria-current")) === "page",
+    );
+    await app.locator("#phone-nav-cash").click();
+    check("The bottom bar opens the cash book", (await app.locator("#cash-view").isVisible()) && (await app.locator("#home-view").isHidden()));
+    await app.locator("#phone-nav-home").click();
+    await app.locator("#language").selectOption("cs");
+    check("The phone home follows the language", (await app.locator("#home-view").innerText()).includes("Vyfotit doklad"));
+    await app.locator("#language").selectOption("vi");
+    // Capture opens the camera input and sends the photo through the normal upload.
+    const sentUpload = app.waitForRequest((r) => r.url().endsWith("/v1/organizations/org-phone/documents") && r.method() === "POST");
+    const chooser = app.waitForEvent("filechooser");
+    await app.locator("#phone-capture").click();
+    await (await chooser).setFiles({ name: "uctenka.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+    check("A captured photo is uploaded as a document", (await sentUpload).postData() !== null);
+    check(
+      "The capture input asks for the camera and accepts photos and PDFs",
+      (await app.locator("#phone-capture-file").getAttribute("capture")) === "environment" &&
+        (await app.locator("#phone-capture-file").getAttribute("accept")) === "image/*,application/pdf",
     );
     await app.locator("#logout").click();
     check("Logging out of the app shows the login screen again", await app.locator("#native-login").isVisible());

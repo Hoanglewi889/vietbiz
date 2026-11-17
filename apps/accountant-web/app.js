@@ -284,6 +284,7 @@ async function refresh() {
     typeof loadPortfolio === "function" ? loadPortfolio() : null,
     typeof loadBank === "function" ? loadBank() : null,
     typeof loadStaff === "function" ? loadStaff() : null,
+    typeof loadPhoneHome === "function" ? loadPhoneHome() : null,
   ]);
   if (state.task) await selectTask(state.task.id);
 }
@@ -1263,6 +1264,7 @@ function translate() {
   if (typeof renderPortfolio === "function") renderPortfolio();
   if (typeof renderSuppliers === "function") renderSuppliers();
   if (typeof renderPartnerCheck === "function") renderPartnerCheck();
+  if (typeof renderPhoneHome === "function" && phone.data) renderPhoneHome();
   if (typeof renderGoods === "function") renderGoods();
   if (typeof renderBank === "function" && !$("bank-tab").hidden) renderBank();
   if (typeof renderStaff === "function" && staffState.period) renderStaff();
@@ -1291,7 +1293,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["portfolio", "tasks", "docs", "cash", "bank", "staff", "invoices", "legal"]) {
+  for (const name of ["home", "portfolio", "tasks", "docs", "cash", "bank", "staff", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
