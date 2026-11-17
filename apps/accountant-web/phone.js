@@ -35,6 +35,13 @@ function phoneMarkNav() {
     else $("phone-nav-" + nav).removeAttribute("aria-current");
   }
 }
+// Codex review, PR #30: nothing of one company or person stays on the phone home once the
+// context changes; the home shows only data loaded for the current company and role.
+function resetPhoneHome() {
+  phone.ticket++;
+  phone.data = null;
+  renderPhoneHome();
+}
 async function loadPhoneHome() {
   phoneApply();
   if (!phoneActive()) return;
@@ -49,7 +56,7 @@ async function loadPhoneHome() {
     owner ? request(base() + "/deadlines?days=14") : null,
   ]);
   if (ticket !== phone.ticket || org !== state.org) return;
-  phone.data = { month, report, cash, waiting, deadlines };
+  phone.data = { org, role: state.role, month, report, cash, waiting, deadlines };
   renderPhoneHome();
 }
 function phoneRow(title, detail, colour, go) {
@@ -64,7 +71,11 @@ function phoneRow(title, detail, colour, go) {
   return row;
 }
 function renderPhoneHome() {
-  const d = phone.data;
+  const d = phone.data && phone.data.org === state.org && phone.data.role === state.role ? phone.data : null;
+  if (!d) {
+    for (const id of ["phone-todo", "phone-recent"]) $(id).replaceChildren();
+    for (const id of ["phone-left", "phone-in", "phone-out", "phone-money-title"]) $(id).textContent = "";
+  }
   $("phone-date").textContent = new Intl.DateTimeFormat(lang === "cs" ? "cs-CZ" : "vi-VN", {
     weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Prague",
   }).format(new Date());
@@ -115,6 +126,9 @@ function phoneGo(view) {
   setTab(view);
   phoneMarkNav();
   window.scrollTo(0, 0);
+  // Codex review, PR #30: coming back to Today reloads it, so payments, entries and answered
+  // questions recorded elsewhere show at once.
+  if (view === "home") run(loadPhoneHome);
 }
 // Capture: the phone's camera (or files on Android), then the same upload as the documents view.
 function phoneCapture() {

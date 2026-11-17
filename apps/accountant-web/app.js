@@ -175,6 +175,7 @@ function retryKey(scope, body) {
 }
 const base = () => `/v1/organizations/${encodeURIComponent(state.org)}`;
 function resetContext() {
+  if (typeof resetPhoneHome === "function") resetPhoneHome();
   state.epoch++;
   state.selection++;
   state.org = "";
@@ -1264,7 +1265,7 @@ function translate() {
   if (typeof renderPortfolio === "function") renderPortfolio();
   if (typeof renderSuppliers === "function") renderSuppliers();
   if (typeof renderPartnerCheck === "function") renderPartnerCheck();
-  if (typeof renderPhoneHome === "function" && phone.data) renderPhoneHome();
+  if (typeof renderPhoneHome === "function") renderPhoneHome();
   if (typeof renderGoods === "function") renderGoods();
   if (typeof renderBank === "function" && !$("bank-tab").hidden) renderBank();
   if (typeof renderStaff === "function" && staffState.period) renderStaff();

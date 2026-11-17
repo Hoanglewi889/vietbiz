@@ -1441,7 +1441,11 @@ const path = require("node:path");
     );
     await app.locator("#phone-nav-cash").click();
     check("The bottom bar opens the cash book", (await app.locator("#cash-view").isVisible()) && (await app.locator("#home-view").isHidden()));
+    // Coming back to Today reloads it (Codex review, PR #30).
+    const reloaded = app.waitForRequest((r) => r.url().includes("/v1/organizations/org-phone/reports/monthly"));
     await app.locator("#phone-nav-home").click();
+    await reloaded;
+    check("Coming back to the phone home reloads its numbers", true);
     await app.locator("#language").selectOption("cs");
     check("The phone home follows the language", (await app.locator("#home-view").innerText()).includes("Vyfotit doklad"));
     await app.locator("#language").selectOption("vi");
@@ -1458,6 +1462,15 @@ const path = require("node:path");
     );
     await app.locator("#logout").click();
     check("Logging out of the app shows the login screen again", await app.locator("#native-login").isVisible());
+    check(
+      "Logging out leaves nothing of the company on the phone home",
+      (await app.evaluate(() => [
+        document.querySelector("#phone-left").textContent,
+        document.querySelector("#phone-todo").textContent,
+        document.querySelector("#phone-recent").textContent,
+        document.querySelector("#home-view").innerText,
+      ].join(""))).match(/292|Velkoobchod|DIČ/) === null,
+    );
     await app.close();
     if (cspViolations.length) console.error("CSP", [...new Set(cspViolations)]);
     check("The workspace runs under its Content-Security-Policy without violations", cspViolations.length === 0);
