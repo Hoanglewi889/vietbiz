@@ -30,6 +30,7 @@
     <script src="empty-folder.js" defer></script>
     <script src="data-export.js" defer></script>
     <script src="partner-check.js" defer></script>
+    <script src="phone.js" defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -132,7 +133,8 @@
         </div>
       </section>
       <div class="workspace-tabs">
-        <button id="portfolio-tab" class="tab" hidden data-i18n="portfolioTab"></button
+        <button id="home-tab" class="tab" hidden data-i18n="phoneToday"></button
+        ><button id="portfolio-tab" class="tab" hidden data-i18n="portfolioTab"></button
         ><button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
@@ -147,6 +149,32 @@
         ></button
         ><span class="tab-note" data-i18n="scopeNote"></span>
       </div>
+      <section id="home-view" class="phone-home" hidden aria-labelledby="phone-org">
+        <header class="phone-head">
+          <span id="phone-date" class="muted"></span>
+          <strong id="phone-org"></strong>
+        </header>
+        <section id="phone-money" class="phone-money" aria-labelledby="phone-money-title" hidden>
+          <div class="phone-money-top">
+            <span id="phone-money-title"></span><small data-i18n="phoneCashBasis"></small>
+          </div>
+          <strong id="phone-left" class="phone-left"></strong>
+          <div class="phone-money-tiles">
+            <div><span data-i18n="phoneIn"></span><strong id="phone-in"></strong></div>
+            <div><span data-i18n="phoneOut"></span><strong id="phone-out"></strong></div>
+          </div>
+        </section>
+        <button id="phone-capture" type="button" class="phone-capture"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12.3" r="3.3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span data-i18n="phoneCapture"></span></button>
+        <input id="phone-capture-file" type="file" accept="image/*,application/pdf" capture="environment" hidden />
+        <section id="phone-todo-section" aria-labelledby="phone-todo-title" hidden>
+          <h2 id="phone-todo-title" data-i18n="phoneTodo"></h2>
+          <div id="phone-todo" class="phone-todo-list"></div>
+        </section>
+        <section id="phone-recent-section" aria-labelledby="phone-recent-title" hidden>
+          <h2 id="phone-recent-title" data-i18n="phoneRecent"></h2>
+          <div id="phone-recent"></div>
+        </section>
+      </section>
       <section id="tasks-view">
         <div class="task-layout">
           <section class="panel task-list-panel">
@@ -904,5 +932,12 @@
       </div>
       <article id="invoice-print" class="invoice-paper" lang="cs"></article>
     </dialog>
+    <nav id="phone-nav" class="phone-nav" hidden>
+      <button id="phone-nav-home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="phoneToday"></span></button
+      ><button id="phone-nav-cash" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 16v-4M12 16V7M17 16v-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneCash"></span></button
+      ><button id="phone-nav-capture" type="button" class="phone-nav-capture"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneCaptureShort"></span></button
+      ><button id="phone-nav-invoices" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneInvoices"></span></button
+      ><button id="phone-nav-staff" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6M15.5 6.5a3 3 0 0 1 0 5.6M17.5 14.8c1.6.6 2.6 2 3 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneShifts"></span></button>
+    </nav>
   </body>
 </html>

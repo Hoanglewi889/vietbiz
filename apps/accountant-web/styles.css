@@ -1843,6 +1843,195 @@ label.check {
   z-index: 60;
   margin: 0;
 }
+/* With the bottom bar, messages sit above it and never take its taps. */
+.phone-ui #notice:not([hidden]) {
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
 .native-app .topbar {
   padding-top: max(12px, env(safe-area-inset-top));
+}
+
+/* Phone screens for the owner in the app (phone.js; design: OwnerHome) */
+.phone-ui .workspace-tabs,
+.phone-ui .metrics,
+.phone-ui .intro {
+  display: none !important;
+}
+.phone-ui body {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+.phone-home {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0 16px;
+}
+.phone-home[hidden] {
+  display: none;
+}
+.phone-home h2 {
+  margin: 4px 0 6px;
+  font-size: 15px;
+}
+.phone-head {
+  display: grid;
+  gap: 2px;
+}
+.phone-head strong {
+  font-size: 20px;
+}
+.phone-money {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 20px;
+  background: #183a32;
+  color: #f5f6ef;
+}
+.phone-money[hidden] {
+  display: none;
+}
+.phone-money-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.phone-money-top span {
+  color: #dae9ad;
+  font-weight: 700;
+}
+.phone-money-top small {
+  color: rgba(245, 246, 239, 0.75);
+}
+.phone-left {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.phone-money-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.phone-money-tiles div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.phone-money-tiles span {
+  font-size: 12px;
+  color: rgba(245, 246, 239, 0.8);
+}
+.phone-money-tiles strong {
+  font-variant-numeric: tabular-nums;
+}
+.phone-capture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 60px;
+  border: 0;
+  border-radius: 18px;
+  background: #dae9ad;
+  color: #183a32;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+}
+.phone-todo-list {
+  display: grid;
+  gap: 8px;
+}
+.phone-todo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface, #fffefa);
+  box-shadow: inset 0 0 0 1px rgba(24, 58, 50, 0.12);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.phone-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #226b50;
+}
+.phone-dot.bad {
+  background: #a54430;
+}
+.phone-dot.warn {
+  background: #c9a227;
+}
+.phone-todo-text {
+  display: grid;
+  min-width: 0;
+}
+.phone-todo-text small {
+  color: var(--muted, #4a5e56);
+}
+.phone-recent-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid rgba(24, 58, 50, 0.1);
+  font-size: 14px;
+}
+.phone-recent-row strong {
+  font-variant-numeric: tabular-nums;
+}
+.phone-recent-row strong.income {
+  color: #226b50;
+}
+.phone-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  padding: 6px 6px max(10px, env(safe-area-inset-bottom));
+  background: #fffefa;
+  box-shadow: 0 -1px 0 rgba(24, 58, 50, 0.1);
+}
+.phone-nav[hidden] {
+  display: none;
+}
+.phone-nav button {
+  flex: 1 1 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 52px;
+  border: 0;
+  background: none;
+  color: #4a5e56;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+.phone-nav button[hidden] {
+  display: none;
+}
+.phone-nav svg {
+  width: 22px;
+  height: 22px;
+}
+.phone-nav button.active {
+  color: #226b50;
+  font-weight: 800;
 }

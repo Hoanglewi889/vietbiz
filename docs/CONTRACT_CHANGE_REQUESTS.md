@@ -564,3 +564,14 @@ Counts only; no document data leaves its company. No schema change.
 - Docs: `docs/mobile/STORE_RELEASE.md` (owner steps, identity provider, signing, internal testing,
   gaps before a public release: in-app account deletion, privacy policy URL, production server,
   phone UI per the design), `docs/mobile/STORE_LISTING.md` (VI/CS/EN texts).
+
+## CR-23 · Phone home for the owner in the app (design "OwnerHome")
+
+- Requested by: the owner ("tiếp tục" after CR-22; STORE_RELEASE §5 P1: phone screens per the
+  design) · Implemented in: `claude/phone-home` · Status: proposed in PR · Depends on: #29.
+- `phone.js`: in the mobile app, for owner and employee, a "Hôm nay / Dnes" view — this month's
+  money on cash basis (`/reports/monthly`), a big "Chụp hóa đơn" button (camera input, then the
+  normal document upload), "Cần xử lý" (approved invoices without a recorded payment, questions
+  waiting on the client, the next filing deadline in 14 days), the latest three cash book lines;
+  a bottom bar: Today, Cash book, Capture, Invoices, Shifts (employee: Today and Capture). Desktop
+  tabs, metrics and the intro give way to it; messages sit above the bar. No new API.
