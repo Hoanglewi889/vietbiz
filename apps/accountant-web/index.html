@@ -31,6 +31,7 @@
     <script src="data-export.js" defer></script>
     <script src="partner-check.js" defer></script>
     <script src="phone.js" defer></script>
+    <script src="pohoda-export.js" defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -334,9 +335,12 @@
             <h2 data-i18n="cashbook"></h2>
             <p class="muted" data-i18n="cashbookHint"></p>
           </div>
-          <label class="cash-month"
-            ><span data-i18n="month"></span><input id="cash-month" type="month"
-          /></label>
+          <div class="cash-heading-actions">
+            <label class="cash-month"
+              ><span data-i18n="month"></span><input id="cash-month" type="month"
+            /></label>
+            <button id="pohoda-export" type="button" class="secondary" hidden data-i18n="pohodaExport"></button>
+          </div>
         </div>
         <div id="cash-report" class="cash-report" aria-live="polite"></div>
         <section id="cash-control" class="cash-control" hidden aria-labelledby="close-title">

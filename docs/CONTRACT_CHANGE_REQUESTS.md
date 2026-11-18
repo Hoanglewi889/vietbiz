@@ -575,3 +575,26 @@ Counts only; no document data leaves its company. No schema change.
   waiting on the client, the next filing deadline in 14 days), the latest three cash book lines;
   a bottom bar: Today, Cash book, Capture, Invoices, Shifts (employee: Today and Capture). Desktop
   tabs, metrics and the intro give way to it; messages sit above the bar. No new API.
+
+## CR-24 · POHODA XML export of a month's invoices (step 2 of the 17.11.2026 report)
+
+- Requested by: the owner ("tiếp tục" after the strategy answer: accountants keep POHODA /
+  Money S3, VietBiz hands data over) · Implemented in: `claude/pohoda-export` · Status: proposed in
+  PR · Depends on: #30.
+- `GET /v1/organizations/{org}/exports/pohoda?month=YYYY-MM` (owner, accountant; audited
+  `export.pohoda`; 404 when the month has nothing; 422 for a bad month) → one Stormware
+  `dat:dataPack` version 2.0, Windows-1250 (other characters as numeric references):
+  issued invoices of the month (`issuedInvoice`, our number as `numberRequested`
+  `checkDuplicity="true"`), approved received invoices of the month from the latest extraction
+  (`receivedInvoice`, supplier number as `originalDocument`, IČO from a CZ DIČ). Amounts in
+  `invoiceSummary/homeCurrency`: 12 % → priceLow*, 21 % → priceHigh*, rest → priceNone; no
+  items, `withoutAccounting` (the accountant pre-codes and posts in POHODA). Received invoices in a
+  foreign currency are left out and named in `X-VietBiz-Skipped`; counts in `X-VietBiz-Issued`,
+  `X-VietBiz-Received`.
+- Validated with xmllint against Stormware's XSD (`all_schema_ver2.zip`, taken from the
+  VitexSoftware/php-pohoda-serialize mirror in the sandbox): `test_the_pack_validates_against_stormware_xsd`
+  runs when `POHODA_XSD_DIR` is set; the schemas are not stored in the repository. **Still to do with
+  a real POHODA**: one import by the accountant (customer/supplier matching, number series).
+- Web: "Xuất sang POHODA (XML) / Export do POHODY (XML)" in the cash book view for the chosen month.
+- Money S3 (paid API module) is not covered; its accountants can import POHODA-style XML only via
+  their own tools — to be asked in the pilot.
