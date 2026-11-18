@@ -1175,6 +1175,30 @@ const path = require("node:path");
     await page.locator("#pohoda-export").click();
     await waitText("#notice", "chưa có hóa đơn bán đã xuất");
     check("An empty month says there is nothing for POHODA", true);
+    // Invoices left out are always reported (Codex review, PR #31); synthetic answers.
+    await page.route("**/exports/pohoda?month=2001-02", (r) => r.fulfill({
+      body: '<?xml version="1.0" encoding="Windows-1250"?><dat:dataPack/>', contentType: "application/xml",
+      headers: { "X-VietBiz-Issued": "1", "X-VietBiz-Received": "0", "X-VietBiz-Skipped": "d1:currency,d2:amounts" },
+    }));
+    await page.route("**/exports/pohoda?month=2001-03", (r) => r.fulfill({
+      status: 422, json: { detail: { message: "No invoice", skipped: [{ document_id: "d1", filename: "a.pdf", reason: "currency" }] } },
+    }));
+    await page.locator("#cash-month").fill("2001-02");
+    const partial = page.waitForEvent("download");
+    await page.locator("#pohoda-export").click();
+    await partial;
+    await waitText("#notice", "cần xử lý tay");
+    const partialText = await page.locator("#notice").innerText();
+    check(
+      "A partial POHODA pack names what was left out",
+      partialText.includes("1 hóa đơn bán, 0 hóa đơn mua") && partialText.includes("1 hóa đơn ngoại tệ") &&
+        partialText.includes("1 hóa đơn thiếu tiền theo mức thuế") && (await page.locator("#notice").getAttribute("class")).includes("error"),
+    );
+    await page.locator("#cash-month").fill("2001-03");
+    await page.locator("#pohoda-export").click();
+    await waitText("#notice", "Không hóa đơn nào");
+    check("When every invoice is left out, nothing is downloaded and the reason is shown",
+      (await page.locator("#notice").innerText()).includes("1 hóa đơn ngoại tệ"));
     await page.locator("#cash-month").fill(todayIso.slice(0, 7));
     await page.locator("#cash-month").dispatchEvent("change");
     check(

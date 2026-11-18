@@ -48,7 +48,8 @@ def cors_origins():
         if origin=='*' or not re.fullmatch(r'(https|capacitor|http)://[A-Za-z0-9.\-]+(:\d+)?',origin):
             raise RuntimeError(f'VIETBIZ_CORS_ORIGINS: {origin!r} is not an exact origin')
     return ['http://localhost:3000','http://127.0.0.1:3000',*extra]
-app.add_middleware(CORSMiddleware,allow_origins=cors_origins(),allow_methods=['*'],allow_headers=['*'])
+app.add_middleware(CORSMiddleware,allow_origins=cors_origins(),allow_methods=['*'],allow_headers=['*'],
+                   expose_headers=['X-VietBiz-Issued','X-VietBiz-Received','X-VietBiz-Skipped'])
 app.add_middleware(SecurityHeaders)
 from .crypto import document_context, keyring, seal, unseal
 keyring()  # fail at start-up, not on the first upload, when the key is missing or malformed

@@ -153,7 +153,8 @@ async function request(path, options = {}) {
     r.status === 204 ? null : options.blob ? await r.blob() : await r.json();
   if (epoch !== state.epoch)
     throw new DOMException("Stale company response", "AbortError");
-  return result;
+  // Some downloads say what they left out in headers (e.g. the POHODA export).
+  return options.withHeaders ? { body: result, headers: r.headers } : result;
 }
 function json(method, body, key) {
   return {

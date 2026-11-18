@@ -103,7 +103,7 @@ def test_non_payer_and_foreign_currency():
     assert c.post(f'/v1/organizations/{org}/documents/{did}/review', headers=h(accountant),
                   json={'decision': 'approve'}).status_code == 200
     r = export(org, accountant)
-    assert r.headers['x-vietbiz-skipped'] == did and r.headers['x-vietbiz-received'] == '0'
+    assert r.headers['x-vietbiz-skipped'] == f'{did}:currency' and r.headers['x-vietbiz-received'] == '0'
     item = ET.fromstring(r.content).find(f'{DAT}dataPackItem/{INV}invoice')
     head = item.find(INV + 'invoiceHeader')
     assert head.findtext(f'{INV}classificationVAT/{TYP}classificationVATType') == 'nonSubsume'
@@ -118,6 +118,43 @@ def test_vietnamese_characters_survive_windows_1250():
     assert '&#7903;' in r.content.decode('windows-1250')  # "ở" in "Phở bò" as a character reference
     item = ET.fromstring(r.content).find(f'{DAT}dataPackItem/{INV}invoice/{INV}invoiceHeader')
     assert item.findtext(INV + 'text') == 'Phở bò'
+
+
+def approved(fields):
+    """A payer company with one approved received invoice carrying these fields."""
+    owner, accountant, _, org, did = ex.company()
+    assert inv.profile(org, owner).status_code == 200
+    assert ex.put(org, did, accountant, 0, fields=fields).status_code == 200
+    assert c.post(f'/v1/organizations/{org}/documents/{did}/review', headers=h(accountant),
+                  json={'decision': 'approve'}).status_code == 200
+    return accountant, org, did
+
+
+def amounts(r):
+    item = ET.fromstring(r.content).find(f'{DAT}dataPackItem/{INV}invoice')
+    return [(e.tag.replace(TYP, ''), e.text) for e in item.find(f'{INV}invoiceSummary/{INV}homeCurrency')]
+
+
+def test_a_simplified_receipt_gets_its_vat_from_the_total():
+    # Codex review, PR #31: missing line amounts are never exported as zero.
+    accountant, org, _ = approved({**ex.FIELDS, 'total': '121.00', 'lines': [{'rate': '21'}]})
+    assert amounts(export(org, accountant)) == [('priceHigh', '100.00'), ('priceHighVAT', '21.00'), ('priceHighSum', '121.00')]
+
+
+def test_complete_lines_are_enough_without_a_total():
+    fields = {k: v for k, v in ex.FIELDS.items() if k != 'total'}
+    accountant, org, _ = approved(fields)
+    r = export(org, accountant)
+    assert r.headers['x-vietbiz-received'] == '1'
+    assert ('priceHighSum', '968.00') in amounts(r)
+
+
+def test_lines_without_amounts_are_named_not_zeroed():
+    fields = {**ex.FIELDS, 'lines': [{'rate': '21'}, {'rate': '12', 'base': '100.00', 'tax': '12.00'}]}
+    accountant, org, did = approved(fields)
+    r = export(org, accountant)
+    assert r.status_code == 422
+    assert r.json()['detail']['skipped'] == [{'document_id': did, 'filename': 'receipt.pdf', 'reason': 'amounts'}]
 
 
 @pytest.mark.skipif(not os.getenv('POHODA_XSD_DIR') or not shutil.which('xmllint'),
