@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "eet-guide.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -945,6 +945,66 @@ const path = require("node:path");
         legalLinks.length >= 43 &&
         legalLinks.every(Boolean),
     );
+    // EET 2.0 step by step (owner request 18.11.2026): one open step, official links, saved ticks.
+    await page.locator("#eet-guide .eet-step").first().waitFor();
+    await page.locator("#eet-guide .eet-actions button").first().waitFor();
+    const eetLinks = await page.$$eval("#eet-guide .eet-links a", (links) =>
+      links.every((a) => a.href.startsWith("https://") && a.rel.includes("noopener") && a.target === "_blank"));
+    check(
+      "EET guide lists six steps, opens only the first and links official sources",
+      (await page.locator("#eet-guide .eet-step").count()) === 6 &&
+        (await page.locator('#eet-guide .eet-step[data-step="applies"]').getAttribute("class")).includes("now") &&
+        (await page.locator("#eet-guide details[open]").count()) === 1 &&
+        (await page.locator("#eet-guide").innerText()).includes("0/6") &&
+        eetLinks,
+    );
+    await page.locator("#eet-guide button").filter({ hasText: "Có, tôi nhận tiền tại chỗ" }).click();
+    await page.locator('#eet-guide .eet-step.now[data-step="dis"]').waitFor();
+    await page.locator('#eet-guide .eet-step.now[data-step="dis"] button').filter({ hasText: "Đã xong" }).click();
+    await page.locator('#eet-guide .eet-step.now[data-step="units"]').waitFor();
+    const eetSaved = await page.evaluate(async () => (await request(base() + "/eet-readiness")).remaining);
+    check(
+      "Ticking EET steps moves to the next one, shows who did it and is saved",
+      (await page.locator("#eet-guide").innerText()).includes("2/6") &&
+        (await page.locator('#eet-guide .eet-step[data-step="dis"] .eet-meta').innerText()).includes("Đánh dấu bởi") &&
+        JSON.stringify(eetSaved) === JSON.stringify(["units", "certificate", "tool", "pilot"]),
+    );
+    // Codex review, PR #32: steps drawn for one company never save to another one.
+    const eetGuard = await page.evaluate(async () => {
+      let calls = 0;
+      const original = window.fetch;
+      window.fetch = (...args) => {
+        calls++;
+        return original(...args);
+      };
+      await eetSave("org-elsewhere", "units", { done: true });
+      const own = eetGuide.org;
+      eetGuide.org = "org-elsewhere";
+      renderEetGuide();
+      const buttons = document.querySelectorAll("#eet-guide .eet-actions button").length;
+      eetGuide.org = own;
+      renderEetGuide();
+      window.fetch = original;
+      return { calls, buttons };
+    });
+    check(
+      "EET steps of another company show no buttons and save nothing",
+      eetGuard.calls === 0 && eetGuard.buttons === 0 &&
+        (await page.locator("#eet-guide .eet-actions button").count()) > 0,
+    );
+    await page.locator('#eet-guide .eet-step[data-step="dis"] button').filter({ hasText: "Làm lại bước này" }).click();
+    await page.locator('#eet-guide .eet-step.now[data-step="dis"]').waitFor();
+    await page.locator('#eet-guide .eet-step[data-step="applies"] button').filter({ hasText: "Chọn lại" }).click();
+    await page.locator('#eet-guide .eet-step.now[data-step="applies"]').waitFor();
+    await page.locator("#eet-guide button").filter({ hasText: "EET OFF" }).click();
+    await page.locator("#eet-guide .eet-result").waitFor();
+    check(
+      "EET OFF hides the remaining steps and explains the 1 400 Kč surcharge",
+      (await page.locator("#eet-guide .eet-step").count()) === 1 &&
+        (await page.locator("#eet-guide .eet-result").innerText()).includes("1 400 Kč"),
+    );
+    await page.locator('#eet-guide .eet-step[data-step="applies"] button').filter({ hasText: "Chọn lại" }).click();
+    await page.locator('#eet-guide .eet-step.now[data-step="applies"]').waitFor();
     // Codex review, PR #8: SZPI supervises restaurants since 2025; the health card was abolished in 2023.
     const bistroText = await page.locator('.legal-card[data-industry="bistro"]').innerText();
     check(
@@ -972,7 +1032,8 @@ const path = require("node:path");
     await page.locator("#language").selectOption("cs");
     check(
       "Legal guide is translated to Czech",
-      (await page.locator(".legal-card h3").innerText()).includes("Nehtové studio") &&
+      (await page.locator("#eet-guide h3").innerText()).includes("krok za krokem") &&
+        (await page.locator(".legal-card h3").innerText()).includes("Nehtové studio") &&
         (await page.locator(".legal-card").innerText()).includes("Od 1. 1. 2026: jen oznámení KHS"),
     );
     await page.locator("#language").selectOption("vi");
@@ -986,7 +1047,7 @@ const path = require("node:path");
     check(
       "Legal guide fits a 390 px screen",
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth &&
-        [...document.querySelectorAll(".legal-card")].every((c) => c.getBoundingClientRect().right <= innerWidth)),
+        [...document.querySelectorAll(".legal-card, #eet-guide, #eet-guide button")].every((c) => c.getBoundingClientRect().right <= innerWidth)),
     );
     if (process.env.VIETBIZ_SCREENSHOT_DIR)
       await page.screenshot({
