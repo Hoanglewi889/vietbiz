@@ -55,6 +55,7 @@ TABLES = {
     'staff_members': (),
     'shifts': (),
     'cash_closes': (),
+    'eet_steps': (),
     'audit_events': (),
 }
 

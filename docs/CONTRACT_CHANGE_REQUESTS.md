@@ -598,3 +598,25 @@ Counts only; no document data leaves its company. No schema change.
 - Web: "Xuất sang POHODA (XML) / Export do POHODY (XML)" in the cash book view for the chosen month.
 - Money S3 (paid API module) is not covered; its accountants can import POHODA-style XML only via
   their own tools — to be asked in the pilot.
+
+## CR-25 · EET 2.0 step-by-step guide with saved progress (step 4 of the 17.11.2026 report)
+
+- Requested by: the owner ("tiếp tục" and "chỉ dẫn và làm theo quy trình để dễ hiểu nhất cho
+  người dùng", 18.11.2026) · Implemented in: `claude/eet-guide` · Status: proposed in PR ·
+  Depends on: #31.
+- Alembic `0015_eet_steps`: table `eet_steps(organization_id, step, choice, done_by, done_at)`,
+  primary key (organization, step). Included in the data export (`eet_steps`).
+- `GET /v1/organizations/{org}/eet-readiness` (owner, accountant, employee) → `steps` in order
+  `applies, dis, units, certificate, tool, pilot` with `done`, `done_by` (display name), `done_at`;
+  `choice`, `applies`, `remaining`. `PUT …/eet-readiness/{step}` (owner, accountant; audited
+  `eet.step`) with `{"done": bool, "choice": "yes"|"no"|"eet_off"}` — choice only on `applies`
+  and required when it is marked done; 404 unknown step. `no` / `eet_off` leave no steps remaining.
+- Web (legal view, VI/CS): one card per step, only the current step open, each with what to do in
+  plain words and its official link (eet.gov.cz, MOJE daně, the Financial Administration's EET FAQ);
+  days left to 1.1.2027, progress bar, who ticked a step and when; EET OFF explains the 1 400 Kč
+  monthly surcharge and asks to agree it with the accountant. Without a company the guide reads but
+  saves nothing; employees read only. The cash register certificate is never uploaded to VietBiz.
+- Facts checked 18.11.2026: DIS+ EET functions and certificates since 1.11.2026, free MOJE EET web
+  app from 1.12.2026, EET 2.0 from 1.1.2027 with January as a pilot month without sanctions, fines
+  up to 500 000 Kč, EET OFF for flat-tax band 1 up to 1 mil. Kč (+1 400 Kč a month). **Not
+  verified**: the MOJE EET app address (linked via eet.gov.cz until it is published).

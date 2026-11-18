@@ -2042,3 +2042,153 @@ label.check {
   align-items: end;
   gap: 10px;
 }
+/* EET 2.0 step by step (eet-guide.js) */
+.eet-guide {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  max-width: 760px;
+}
+.eet-guide h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.eet-intro {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.eet-countdown {
+  margin: 0 0 10px;
+  font-weight: 600;
+  color: var(--green);
+}
+.eet-progress {
+  height: 8px;
+  border-radius: 8px;
+  background: #e8ece4;
+  overflow: hidden;
+}
+.eet-progress span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  transition: width 0.3s;
+}
+.eet-progress-label {
+  margin: 4px 0 10px;
+  font-size: 13px;
+}
+.eet-note {
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f4f1e8;
+}
+.eet-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.eet-step {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.eet-step.now {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px #e3eed6;
+}
+.eet-step.done {
+  background: #f6f9f2;
+}
+.eet-step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.eet-step-head strong {
+  flex: 1 1 180px;
+  font-size: 15px;
+}
+.eet-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+  background: #e8ece4;
+  flex: none;
+}
+.eet-step.now .eet-num,
+.eet-step.done .eet-num {
+  background: var(--green);
+  color: #fff;
+}
+.eet-badge {
+  font-size: 12px;
+  color: var(--muted, #667);
+}
+.eet-meta {
+  margin: 4px 0 0 38px;
+  font-size: 12px;
+  color: var(--muted, #667);
+}
+.eet-body {
+  margin: 6px 0 0 38px;
+  font-size: 14px;
+}
+.eet-body summary {
+  cursor: pointer;
+}
+.eet-body ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.eet-body li {
+  margin: 3px 0;
+}
+.eet-links {
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.eet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0 38px;
+}
+.eet-actions .link-button {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--green);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.eet-result {
+  margin: 12px 0 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f4f1e8;
+  font-size: 14px;
+}
+.eet-result.ok {
+  background: #eef3e4;
+}
+@media (max-width: 520px) {
+  .eet-body,
+  .eet-actions,
+  .eet-meta {
+    margin-left: 0;
+  }
+  .eet-actions button {
+    flex: 1 1 100%;
+  }
+}
