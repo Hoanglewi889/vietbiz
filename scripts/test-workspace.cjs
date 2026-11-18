@@ -969,6 +969,29 @@ const path = require("node:path");
         (await page.locator('#eet-guide .eet-step[data-step="dis"] .eet-meta').innerText()).includes("Đánh dấu bởi") &&
         JSON.stringify(eetSaved) === JSON.stringify(["units", "certificate", "tool", "pilot"]),
     );
+    // Codex review, PR #32: steps drawn for one company never save to another one.
+    const eetGuard = await page.evaluate(async () => {
+      let calls = 0;
+      const original = window.fetch;
+      window.fetch = (...args) => {
+        calls++;
+        return original(...args);
+      };
+      await eetSave("org-elsewhere", "units", { done: true });
+      const own = eetGuide.org;
+      eetGuide.org = "org-elsewhere";
+      renderEetGuide();
+      const buttons = document.querySelectorAll("#eet-guide .eet-actions button").length;
+      eetGuide.org = own;
+      renderEetGuide();
+      window.fetch = original;
+      return { calls, buttons };
+    });
+    check(
+      "EET steps of another company show no buttons and save nothing",
+      eetGuard.calls === 0 && eetGuard.buttons === 0 &&
+        (await page.locator("#eet-guide .eet-actions button").count()) > 0,
+    );
     await page.locator('#eet-guide .eet-step[data-step="dis"] button').filter({ hasText: "Làm lại bước này" }).click();
     await page.locator('#eet-guide .eet-step.now[data-step="dis"]').waitFor();
     await page.locator('#eet-guide .eet-step[data-step="applies"] button').filter({ hasText: "Chọn lại" }).click();

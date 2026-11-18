@@ -121,14 +121,15 @@ const EET_STEPS = [
       "Chyba v lednu: hned dodavatel pokladny / účetní."],
     [["eet.gov.cz", EET_LINKS.web]]],
 ];
-const eetGuide = { data: null, seen: null, ticket: 0 };
+// `org` is the company `data` belongs to: buttons save only to that company (Codex review, PR #32).
+const eetGuide = { data: null, org: null, seen: null, ticket: 0 };
 
 function eetText(key, values) {
   const copy = EET_UI[lang === "cs" ? "cs" : "vi"][key];
   return values ? fill(copy, values) : copy;
 }
 function eetCanEdit() {
-  return Boolean(state.org) && ["owner", "accountant"].includes(state.role);
+  return Boolean(state.org) && ["owner", "accountant"].includes(state.role) && eetGuide.org === state.org;
 }
 function eetLink(label, href) {
   const a = text("a", label);
@@ -143,19 +144,24 @@ function eetButton(label, onClick, cls = "secondary") {
   b.onclick = () => run(onClick, b);
   return b;
 }
-async function eetSave(step, body) {
-  const org = state.org;
-  const answer = await request(base() + "/eet-readiness/" + step, json("PUT", body));
-  if (state.org !== org) return;
+async function eetSave(org, step, body) {
+  // A button drawn for another company (still on screen while the new one loads) saves nothing.
+  if (!org || org !== state.org || org !== eetGuide.org) return;
+  const answer = await request("/v1/organizations/" + encodeURIComponent(org) + "/eet-readiness/" + step, json("PUT", body));
+  if (state.org !== org || eetGuide.org !== org) return;
   eetGuide.data = answer;
   renderEetGuide();
 }
 async function loadEetGuide() {
-  const ticket = ++eetGuide.ticket;
-  if (!state.org) return renderEetGuide();
+  const ticket = ++eetGuide.ticket,
+    org = state.org;
+  if (!org) return renderEetGuide();
   try {
-    const answer = await request(base() + "/eet-readiness");
-    if (ticket === eetGuide.ticket) eetGuide.data = answer;
+    const answer = await request("/v1/organizations/" + encodeURIComponent(org) + "/eet-readiness");
+    if (ticket === eetGuide.ticket && state.org === org) {
+      eetGuide.data = answer;
+      eetGuide.org = org;
+    }
   } catch (error) {
     if (ticket === eetGuide.ticket) eetGuide.data = null;
   }
@@ -165,14 +171,18 @@ function refreshEetGuide() {
   const seen = state.org + "|" + state.role;
   if (seen === eetGuide.seen) return renderEetGuide();
   eetGuide.seen = seen;
+  // Clear what is on screen at once, so the previous company's buttons cannot be used meanwhile.
   eetGuide.data = null;
+  eetGuide.org = null;
+  renderEetGuide();
   loadEetGuide();
 }
 function renderEetGuide() {
   const box = $("eet-guide");
   if (!box) return;
   const vi = lang !== "cs",
-    data = eetGuide.data,
+    data = eetGuide.org === state.org ? eetGuide.data : null,
+    org = eetGuide.org,
     edit = eetCanEdit() && Boolean(data),
     status = {};
   if (data) for (const s of data.steps) status[s.step] = s;
@@ -230,12 +240,12 @@ function renderEetGuide() {
       const actions = text("div", "", "eet-actions");
       if (id === "applies" && !isDone) {
         actions.append(
-          eetButton(vi ? "Có, tôi nhận tiền tại chỗ" : "Ano, beru platby na místě", () => eetSave(id, { done: true, choice: "yes" }), "primary"),
-          eetButton(vi ? "Không, chỉ chuyển khoản / online" : "Ne, jen převody / online", () => eetSave(id, { done: true, choice: "no" })),
-          eetButton("EET OFF", () => eetSave(id, { done: true, choice: "eet_off" })),
+          eetButton(vi ? "Có, tôi nhận tiền tại chỗ" : "Ano, beru platby na místě", () => eetSave(org, id, { done: true, choice: "yes" }), "primary"),
+          eetButton(vi ? "Không, chỉ chuyển khoản / online" : "Ne, jen převody / online", () => eetSave(org, id, { done: true, choice: "no" })),
+          eetButton("EET OFF", () => eetSave(org, id, { done: true, choice: "eet_off" })),
         );
-      } else if (isDone) actions.append(eetButton(id === "applies" ? eetText("change") : eetText("undo"), () => eetSave(id, { done: false }), "link-button"));
-      else if (isNow) actions.append(eetButton(eetText("doneMark") + " ✓", () => eetSave(id, { done: true }), "primary"));
+      } else if (isDone) actions.append(eetButton(id === "applies" ? eetText("change") : eetText("undo"), () => eetSave(org, id, { done: false }), "link-button"));
+      else if (isNow) actions.append(eetButton(eetText("doneMark") + " ✓", () => eetSave(org, id, { done: true }), "primary"));
       li.append(actions);
     }
     list.append(li);

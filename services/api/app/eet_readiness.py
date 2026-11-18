@@ -71,8 +71,11 @@ def build_router(current_user, authorize, audit):
         with connection() as db:
             authorize(db, uid, org_id, ('owner', 'accountant'))
             if body.done:
-                db.execute('DELETE FROM eet_steps WHERE organization_id=? AND step=?', (org_id, step))
-                db.execute('INSERT INTO eet_steps(organization_id,step,choice,done_by,done_at) VALUES (?,?,?,?,?)',
+                # Codex review, PR #32: one atomic upsert, so owner and accountant ticking the same
+                # step at once both succeed instead of racing a delete/insert pair to a 500.
+                db.execute('INSERT INTO eet_steps(organization_id,step,choice,done_by,done_at) VALUES (?,?,?,?,?) '
+                           'ON CONFLICT(organization_id,step) DO UPDATE SET choice=excluded.choice, '
+                           'done_by=excluded.done_by, done_at=excluded.done_at',
                            (org_id, step, body.choice, uid, datetime.now(timezone.utc).isoformat(timespec='seconds')))
             else:
                 db.execute('DELETE FROM eet_steps WHERE organization_id=? AND step=?', (org_id, step))

@@ -1,4 +1,9 @@
 """EET 2.0 readiness steps per company (owner request 18.11.2026). Synthetic data only."""
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
+from app import main
+from app.database import Transaction
 from test_api import c, h
 from test_archive import company
 
@@ -52,3 +57,29 @@ def test_other_companies_cannot_read_or_tick():
     stranger, _, _, _ = company()
     assert c.get(url(org), headers=h(stranger)).status_code == 403
     assert c.put(url(org, 'dis'), headers=h(stranger), json={'done': True}).status_code == 403
+
+
+def test_owner_and_accountant_ticking_the_same_step_at_once_both_succeed(monkeypatch):
+    # Codex review, PR #32: the old delete + insert pair raced to a primary-key error (HTTP 500).
+    owner, accountant, _, org = company()
+    gate = Barrier(2)
+    original = Transaction.execute
+
+    def synchronized(self, statement, parameters=()):
+        if statement.startswith('INSERT INTO eet_steps'):
+            gate.wait(timeout=10)
+        return original(self, statement, parameters)
+
+    monkeypatch.setattr(Transaction, 'execute', synchronized)
+
+    def tick(who):
+        return c.put(url(org, 'dis'), headers=h(who), json={'done': True}).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = list(pool.map(tick, (owner, accountant)))
+    monkeypatch.setattr(Transaction, 'execute', original)
+    assert statuses == [200, 200]
+    with main.conn() as db:
+        assert db.execute('SELECT COUNT(*) AS n FROM eet_steps WHERE organization_id=? AND step=?',
+                          (org, 'dis')).fetchone()['n'] == 1
+    assert 'dis' not in c.get(url(org), headers=h(owner)).json()['remaining']
