@@ -291,6 +291,8 @@ from .pohoda_export import build_router as build_pohoda_router
 app.include_router(build_pohoda_router(current_user, authorize, event))
 from .eet_readiness import build_router as build_eet_router
 app.include_router(build_eet_router(current_user, authorize, event))
+from .overview import build_router as build_overview_router
+app.include_router(build_overview_router(current_user, authorize, event))
 
 # Serve the local demo from the API origin; API authorization is unchanged.
 from fastapi.staticfiles import StaticFiles

@@ -177,6 +177,7 @@ function retryKey(scope, body) {
 const base = () => `/v1/organizations/${encodeURIComponent(state.org)}`;
 function resetContext() {
   if (typeof resetPhoneHome === "function") resetPhoneHome();
+  if (typeof resetOverview === "function") resetOverview();
   state.epoch++;
   state.selection++;
   state.org = "";
@@ -202,6 +203,8 @@ function resetContext() {
   state.cashTicket++;
   state.cashDoc = null;
   $("cash-tab").hidden = true;
+  $("overview-tab").hidden = true;
+  if (!$("overview-view").hidden) setTab("tasks");
   if (!$("cash-view").hidden) setTab("tasks");
   if (invoicesReady()) resetInvoices();
   if (typeof resetPortfolio === "function") resetPortfolio();
@@ -287,6 +290,7 @@ async function refresh() {
     typeof loadBank === "function" ? loadBank() : null,
     typeof loadStaff === "function" ? loadStaff() : null,
     typeof loadPhoneHome === "function" ? loadPhoneHome() : null,
+    typeof loadOverview === "function" ? loadOverview() : null,
   ]);
   if (state.task) await selectTask(state.task.id);
 }
@@ -937,6 +941,8 @@ async function saveCashEntry() {
     description: $("c-description").value,
     document_id: state.cashDoc,
   };
+  // A counter sale may carry its VAT rate (overview splits sales by rate); payments of invoices do not.
+  if (body.kind === "income" && $("c-vat").value) body.vat_rate = $("c-vat").value;
   try {
     // Same key until it succeeds: a retry after a lost response is not booked twice.
     await request(
@@ -1295,7 +1301,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["home", "portfolio", "tasks", "docs", "cash", "bank", "staff", "invoices", "legal"]) {
+  for (const name of ["home", "portfolio", "tasks", "docs", "overview", "cash", "bank", "staff", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
@@ -1563,6 +1569,8 @@ $("cash-month").onchange = () => run(() => loadCash());
 $("c-kind").onchange = () => {
   $("c-category").value = "";
   renderCashOptions();
+  $("c-vat-label").hidden = $("c-kind").value !== "income";
+  if ($("c-vat-label").hidden) $("c-vat").value = "";
 };
 $("cash-form").onsubmit = (e) => {
   e.preventDefault();

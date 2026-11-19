@@ -6,6 +6,7 @@ so the history stays traceable for the accountant. The report is a management ov
 only through the entries that record their payment, so nothing is counted twice.
 """
 import json
+from hashlib import sha256
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -39,6 +40,8 @@ class EntryIn(BaseModel):
     counterparty: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=500)
     document_id: str | None = Field(default=None, max_length=64)
+    # VAT rate of a counter sale (register total); payments of issued invoices leave it empty.
+    vat_rate: Literal['0', '12', '21'] | None = None
 
     @field_validator('counterparty', 'description', 'document_id', mode='before')
     @classmethod
@@ -52,6 +55,8 @@ class EntryIn(BaseModel):
             raise ValueError(f'category must be one of {", ".join(allowed)} for {self.kind}')
         if Decimal(self.amount) <= 0:
             raise ValueError('amount must be positive')
+        if self.vat_rate is not None and self.kind != 'income':
+            raise ValueError('vat_rate applies only to income')
         # The business day is Prague's, as in the form, not the server's clock.
         if self.entry_date.isoformat() > today_prague():
             raise ValueError('entry_date cannot be in the future; record money when it moves')
@@ -64,11 +69,21 @@ class VoidIn(BaseModel):
 
 
 COLUMNS = ('id,kind,entry_date,amount,currency,method,category,counterparty,description,'
-           'document_id,created_by,created_at,voided_at,voided_by,void_reason')
+           'document_id,created_by,created_at,voided_at,voided_by,void_reason,vat_rate')
 
 
 def _money(value):
     return str(Decimal(value).quantize(Decimal('0.01')))
+
+
+def _request_hash(body):
+    """Without a VAT rate the hash stays what it was before the field existed, so a retry
+    of an older request still finds its entry."""
+    if body.vat_rate is None:
+        data = body.model_dump(mode='json')
+        data.pop('vat_rate')
+        return sha256(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return digest(body)
 
 
 def _entry(row):
@@ -135,7 +150,7 @@ def build_router(current_user, authorize, audit):
     def create_entry(org_id: str, body: EntryIn, response: Response, idempotency_key: Key,
                      uid: str = Depends(current_user)):
         # A retried submission (lost response) returns the first entry instead of a second one.
-        entry_id, now, request_hash = str(uuid4()), datetime.now(timezone.utc).isoformat(), digest(body)
+        entry_id, now, request_hash = str(uuid4()), datetime.now(timezone.utc).isoformat(), _request_hash(body)
         with connection() as db:
             authorize(db, uid, org_id, ('owner', 'accountant'))
             if body.document_id is not None and db.execute(
@@ -144,11 +159,11 @@ def build_router(current_user, authorize, audit):
                 raise HTTPException(422, 'Unknown document for this company')
             inserted = db.execute(
                        f'INSERT INTO cashbook_entries(organization_id,idempotency_key,request_hash,{COLUMNS}) '
-                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) '
+                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) '
                        'ON CONFLICT(organization_id,created_by,idempotency_key) DO NOTHING',
                        (org_id, idempotency_key, request_hash, entry_id, body.kind, body.entry_date.isoformat(), _money(body.amount), body.currency,
                         body.method, body.category, body.counterparty, body.description, body.document_id,
-                        uid, now, None, None, None))
+                        uid, now, None, None, None, body.vat_rate))
             row = db.execute(f'SELECT request_hash,{COLUMNS} FROM cashbook_entries WHERE organization_id=? '
                              'AND created_by=? AND idempotency_key=?', (org_id, uid, idempotency_key)).fetchone()
             if row['request_hash'] != request_hash:
