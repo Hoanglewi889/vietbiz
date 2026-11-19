@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import make_url
 
-SCHEMA_REVISION = '0015_eet_steps'
+SCHEMA_REVISION = '0016_cashbook_vat_rate'
 
 
 def database_url():

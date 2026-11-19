@@ -329,6 +329,10 @@ const COPY = {
     invoiceIssued: "Đã xuất hóa đơn số {number}",
     print: "In",
     legalTab: "Pháp lý theo ngành",
+    overviewTab: "Tổng quan tiền",
+    phoneOverview: "Xem tổng quan, DPH và kế hoạch 2027 →",
+    vatRateSale: "Thuế suất (bán tại quầy)",
+    vatRateNone: "Không ghi / thanh toán hóa đơn",
     legalHint:
       "Các nghĩa vụ chính theo từng ngành, có điều luật và nguồn chính thức cho từng mục.",
     legalDisclaimer:
@@ -1037,6 +1041,10 @@ const COPY = {
     invoiceIssued: "Faktura {number} vystavena",
     print: "Tisk",
     legalTab: "Právo podle oboru",
+    overviewTab: "Přehled peněz",
+    phoneOverview: "Přehled, DPH a plán 2027 →",
+    vatRateSale: "Sazba DPH (tržba na pokladně)",
+    vatRateNone: "Neuvádět / úhrada faktury",
     legalHint: "Hlavní povinnosti podle oboru, u každé položky předpis a oficiální zdroj.",
     legalDisclaimer:
       "Informativní přehled, nejde o právní ani daňové poradenství. Před rozhodnutím se poraďte s účetní, živnostenským úřadem nebo KHS.",

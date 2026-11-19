@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="qty-stepper.css" />
     <link rel="stylesheet" href="range-calendar.css" />
     <link rel="stylesheet" href="empty-folder.css" />
+    <link rel="stylesheet" href="overview.css" />
     <script src="runtime.js" defer></script>
     <script src="i18n.js" defer></script>
     <script src="app.js" defer></script>
@@ -33,6 +34,7 @@
     <script src="phone.js" defer></script>
     <script src="pohoda-export.js" defer></script>
     <script src="eet-guide.js" defer></script>
+    <script src="overview.js" defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -139,6 +141,7 @@
         ><button id="portfolio-tab" class="tab" hidden data-i18n="portfolioTab"></button
         ><button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
+        ><button id="overview-tab" class="tab" hidden data-i18n="overviewTab"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
         ><button id="bank-tab" class="tab" hidden data-i18n="bankTab"></button
         ><button id="staff-tab" class="tab" hidden data-i18n="staffTab"></button
@@ -165,6 +168,7 @@
             <div><span data-i18n="phoneIn"></span><strong id="phone-in"></strong></div>
             <div><span data-i18n="phoneOut"></span><strong id="phone-out"></strong></div>
           </div>
+          <button id="phone-overview" type="button" class="phone-overview" data-i18n="phoneOverview"></button>
         </section>
         <button id="phone-capture" type="button" class="phone-capture"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12.3" r="3.3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span data-i18n="phoneCapture"></span></button>
         <input id="phone-capture-file" type="file" accept="image/*,application/pdf" capture="environment" hidden />
@@ -330,6 +334,9 @@
         </section>
         <div id="document-list" class="document-list"></div>
       </section>
+      <section id="overview-view" class="panel" hidden>
+        <div id="overview-root" class="ov" aria-live="polite"></div>
+      </section>
       <section id="cash-view" class="panel" hidden>
         <div class="section-heading">
           <div>
@@ -392,6 +399,14 @@
           ></label>
           <label
             ><span data-i18n="category"></span><select id="c-category"></select
+          ></label>
+          <label id="c-vat-label" hidden
+            ><span data-i18n="vatRateSale"></span
+            ><select id="c-vat">
+              <option value="" data-i18n="vatRateNone"></option>
+              <option value="21">21 %</option>
+              <option value="12">12 %</option>
+              <option value="0">0 %</option></select
           ></label>
           <label
             ><span data-i18n="counterparty"></span

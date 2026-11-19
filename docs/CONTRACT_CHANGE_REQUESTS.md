@@ -620,3 +620,26 @@ Counts only; no document data leaves its company. No schema change.
   app from 1.12.2026, EET 2.0 from 1.1.2027 with January as a pilot month without sanctions, fines
   up to 500 000 Kč, EET OFF for flat-tax band 1 up to 1 mil. Kč (+1 400 Kč a month). **Not
   verified**: the MOJE EET app address (linked via eet.gov.cz until it is published).
+
+## CR-26 · Owner money overview in the app (dashboard "Tiền của các tiệm")
+
+- Requested by: the owner, 19.11.2026 (dashboard reviewed as a Data artifact with sample data, then
+  "thấy đẹp rồi, cho vào app và cập nhật web", plus "chụp và lưu trữ hóa đơn") · Implemented in:
+  `claude/owner-overview` · Status: proposed in PR · Depends on: #32.
+- Alembic `0016_cashbook_vat_rate`: `cashbook_entries.vat_rate` NULL or '0'/'12'/'21'. `POST …/cashbook`
+  accepts `vat_rate` on income only (a counter sale / register total); payments of issued invoices
+  leave it empty. Without a rate the idempotency hash is the one used before the field existed.
+- `GET /v1/organizations/{org}/reports/overview?to=YYYY-MM&months=1..24` (owner, accountant): per
+  month money in by method, money out by group (goods+supplies, wages, rent, other), net; VAT on
+  sales (counter sales with a rate + issued invoices) and on purchases (approved received invoices,
+  split as the POHODA export reads them) by 21/12/0 %, `unknown` where no rate can be read; VAT due
+  only for a VAT payer (non-payer: purchase VAT stays in the cost). Unpaid approved supplier invoices.
+  CZK only (EUR counted in `skipped`). A management overview, not a VAT return.
+- Web and app (same accountant-web, wrapped by Capacitor): tab "Tổng quan tiền / Přehled peněz",
+  dark theme chosen by the owner. Shop picker when the user owns several companies ("Tất cả tiệm"
+  sums them), month picker, four headline numbers, shop comparison, 12-month trend, costs, payment
+  mix, VAT table and monthly VAT due, unpaid suppliers, 2027 plan (inflation 3,2 % ČNB autumn 2026
+  forecast; OSVČ minimum advances 2027 5 281 + 3 488 Kč; flat tax band 1 2027 9 662 Kč; employer
+  contributions 33,8 %; all adjustable, computed in the browser), capture card (photo of a supplier
+  invoice, the day's register total with its VAT rate, the document archive with review counts).
+  Cash form: VAT rate select for income. Phone home: "Xem tổng quan, DPH và kế hoạch 2027".

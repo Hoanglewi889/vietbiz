@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "eet-guide.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "eet-guide.js", "overview.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -647,6 +647,83 @@ const path = require("node:path");
         fullPage: true,
       });
     await page.setViewportSize({ width: 1440, height: 1100 });
+    // Owner money overview (19.11.2026): counter sale with a VAT rate, then the dark overview.
+    await page.locator("#c-kind").selectOption("income");
+    check("The VAT rate shows only for income", await page.locator("#c-vat-label").isVisible());
+    await page.locator("#c-amount").fill("1120");
+    await page.locator("#c-method").selectOption("card");
+    await page.locator("#c-category").selectOption("sales");
+    await page.locator("#c-vat").selectOption("12");
+    await page.locator("#cash-submit").click();
+    await page.waitForFunction(() => document.querySelector("#c-amount").value === "");
+    await page.locator("#c-kind").selectOption("expense");
+    check("The VAT rate hides again for expenses", !(await page.locator("#c-vat-label").isVisible()));
+    await page.locator("#overview-tab").click();
+    await page.locator("#ov-in .ov-kpi-value").waitFor();
+    const ovIn = await page.locator("#ov-in .ov-kpi-value").innerText();
+    check(
+      "Overview shows this month's money, VAT by rate and the 2027 plan",
+      ovIn.replace(/\s/g, "") === "13621" &&
+        (await page.locator("#ov-take").innerText()).includes("còn lại") &&
+        (await page.locator("#ov-vat-table").innerText()).includes("12 %") &&
+        (await page.locator("#ov-vat-table").innerText()).includes("chưa rõ thuế suất") &&
+        (await page.locator("#ov-plan-net .ov-kpi-value").innerText()).length > 0 &&
+        (await page.locator("#ov-trend-card svg").count()) === 1,
+    );
+    const planBefore = await page.locator("#ov-plan-net .ov-kpi-value").innerText();
+    await page.locator("#ov-plan-rev").fill("20");
+    await page.locator("#ov-plan-rev").dispatchEvent("change");
+    check(
+      "Changing a plan rate recomputes the 2027 plan",
+      (await page.locator("#ov-plan-net .ov-kpi-value").innerText()) !== planBefore,
+    );
+    await page.locator("#ov-month").selectOption("2026-10");
+    await page.locator("#ov-vat-purchases").waitFor();
+    check(
+      "October shows the approved purchase invoice and no unpaid supplier",
+      (await page.locator("#ov-vat-purchases .ov-kpi-value").innerText()).replace(/\s/g, "") === "3208" &&
+        (await page.locator("#ov-unpaid-card").innerText()).includes("Không có hóa đơn"),
+    );
+    await page.locator("#language").selectOption("cs");
+    await page.waitForFunction(() => document.querySelector("#overview-tab").textContent === "Přehled peněz");
+    check(
+      "Overview is translated to Czech",
+      (await page.locator("#ov-in .ov-kpi-label").innerText()) === "Příjmy" &&
+        (await page.locator("#ov-plan-card h3").innerText()).startsWith("Plán"),
+    );
+    await page.locator("#language").selectOption("vi");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#ov-in").waitFor();
+    await page.waitForTimeout(400); // charts are redrawn at the new width
+    check(
+      "Overview fits a 390 px screen",
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth &&
+        [...document.querySelectorAll("#overview-view .ov-kpi, #overview-view select, #overview-view input, #overview-view .ov-card")]
+          .every((el) => el.getBoundingClientRect().right <= innerWidth + 1)),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({ path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "overview-mobile.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.waitForTimeout(400);
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({ path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "overview-desktop.png"), fullPage: true });
+    check(
+      "Overview offers photo, register total and archive, with what waits for review",
+      (await page.locator("#ov-capture-card").innerText()).includes("Chờ duyệt") &&
+        (await page.locator("#ov-photo").isVisible()) && (await page.locator("#ov-archive").isVisible()),
+    );
+    // Codex review, PR #33: a pending supplier payment must not travel with the register total.
+    await page.evaluate(() => { state.cashDoc = "doc-pending"; document.querySelector("#c-linked").hidden = false; });
+    await page.locator("#ov-register").click();
+    await page.locator("#cash-view").waitFor();
+    check(
+      "Register total opens the cash form as a fresh counter sale with its VAT rate",
+      (await page.evaluate(() => state.cashDoc === null)) && !(await page.locator("#c-linked").isVisible()) &&
+        (await page.locator("#cash-view").isVisible()) &&
+        (await page.locator("#c-kind").inputValue()) === "income" &&
+        (await page.locator("#c-category").inputValue()) === "sales" &&
+        (await page.locator("#c-vat-label").isVisible()),
+    );
     // Issued invoices (CR-5): seller profile, draft, issue, print, ISDOC.
     await page.locator("#invoices-tab").click();
     await page.locator("#invoice-list .empty").waitFor();
