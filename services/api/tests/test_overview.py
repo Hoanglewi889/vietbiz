@@ -2,6 +2,7 @@
 Synthetic data only."""
 from uuid import uuid4
 
+import test_extractions as ex
 import test_pohoda_export as px
 from test_api import c, h
 from test_archive import company
@@ -82,3 +83,16 @@ def test_only_owner_and_accountant_of_the_company():
     assert overview(org, owner, to='2026-13').status_code == 422
     assert overview(org, owner, months=25).status_code == 422
     assert len(overview(org, owner).json()['months']) == 12
+
+
+def test_rates_written_with_decimals_land_in_their_row():
+    # Codex review, PR #33: "21.00" and "12.0" are 21 % and 12 %, not 0 %.
+    owner, accountant, _, org, did = ex.company()
+    fields = {**ex.FIELDS, 'lines': [{'rate': '12.0', 'base': '2000.00', 'tax': '240.00'},
+                                     {'rate': '21.00', 'base': '800.00', 'tax': '168.00'}]}
+    assert ex.put(org, did, accountant, 0, fields).status_code == 200
+    assert c.post(f'/v1/organizations/{org}/documents/{did}/review', headers=h(accountant),
+                  json={'decision': 'approve'}).status_code == 200
+    oct_ = month(overview(org, owner, months=1).json())
+    assert oct_['purchases']['21']['gross'] == '968.00' and oct_['purchases']['12']['gross'] == '2240.00'
+    assert oct_['purchases']['0']['gross'] == '0.00' and oct_['purchases_unknown'] == '0.00'

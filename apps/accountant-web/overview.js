@@ -47,7 +47,8 @@ const OV_TEXT = {
     skipped: "{n} khoản bằng EUR không tính vào đây.", empty: "Chưa có số liệu. Ghi thu chi trong Sổ thu chi hoặc duyệt hóa đơn để xem tổng quan.",
     failed: "Không tải được số liệu của {name}.",
     capture: "Chụp và lưu hóa đơn",
-    captureNote: "Hóa đơn chụp được lưu trong kho chứng từ, kế toán kiểm tra rồi duyệt. Chờ duyệt: {review} · cần sửa: {changes} · đã duyệt: {approved}.",
+    captureFor: "Cho công ty {name}: hóa đơn chụp được lưu trong kho chứng từ, kế toán kiểm tra rồi duyệt.",
+    captureNote: "Chờ duyệt: {review} · cần sửa: {changes} · đã duyệt: {approved}.",
     capturePhoto: "Chụp hóa đơn nhập", captureRegister: "Ghi tổng quầy hôm nay", captureArchive: "Mở kho hóa đơn",
   },
   cs: {
@@ -84,7 +85,8 @@ const OV_TEXT = {
     skipped: "{n} položek v EUR zde není započteno.", empty: "Zatím žádná data. Zapište příjmy a výdaje v pokladní knize nebo schvalte faktury.",
     failed: "Data firmy {name} se nepodařilo načíst.",
     capture: "Vyfotit a uložit doklady",
-    captureNote: "Vyfocené doklady se ukládají do archivu, účetní je zkontroluje a schválí. Ke kontrole: {review} · k opravě: {changes} · schváleno: {approved}.",
+    captureFor: "Pro firmu {name}: vyfocené doklady se ukládají do archivu, účetní je zkontroluje a schválí.",
+    captureNote: "Ke kontrole: {review} · k opravě: {changes} · schváleno: {approved}.",
     capturePhoto: "Vyfotit přijatou fakturu", captureRegister: "Zapsat dnešní tržbu", captureArchive: "Otevřít archiv dokladů",
   },
 };
@@ -293,15 +295,26 @@ function ovLegend(items) {
 // Capture and archive: the three things an owner does with paper — photograph a supplier invoice,
 // book the day's register total with its VAT rate, open the archive — plus what waits for review.
 function ovCapture() {
-  const docs = state.docs || [];
+  // Codex review, PR #33: the actions work on one company. With a shop chosen that is it (the
+  // workspace switches to it first); with all shops it is the company open in the workspace.
+  const target = ovState.shop || state.org;
+  const name = (state.orgs.find((o) => o.id === target) || {}).name || "";
+  const docs = target === state.org ? state.docs || [] : null;
   const count = (status) => docs.filter((d) => d.status === status).length;
-  const card = ovCard("ov-capture-card", ovT("capture"), ovT("captureNote", { review: count("needs_review"), changes: count("needs_changes"), approved: count("approved") }));
+  const card = ovCard("ov-capture-card", ovT("capture"),
+    ovT("captureFor", { name }) + (docs ? " " + ovT("captureNote", { review: count("needs_review"), changes: count("needs_changes"), approved: count("approved") }) : ""));
   const row = ovEl("div", "ov-actions");
   const action = (id, label, go) => {
     const b = ovEl("button", "ov-action", label);
     b.type = "button";
     b.id = id;
-    b.onclick = go;
+    b.onclick = () => run(async () => {
+      if (target !== state.org) {
+        $("org").value = target;
+        await switchOrg();
+      }
+      go();
+    }, b);
     return b;
   };
   const photo = action("ov-photo", ovT("capturePhoto"), () => {
@@ -309,11 +322,14 @@ function ovCapture() {
     setTab("docs");
     $("upload-file").click();
   });
-  photo.hidden = state.role !== "owner";
+  photo.hidden = (ovState.shops.find((o) => o.id === target) || { role: state.role }).role !== "owner";
   row.append(
     photo,
     action("ov-register", ovT("captureRegister"), () => {
       setTab("cash");
+      // A fresh, unlinked entry: a pending supplier payment must not travel with the sale.
+      state.cashDoc = null;
+      $("c-linked").hidden = true;
       $("c-kind").value = "income";
       $("c-kind").onchange();
       $("c-category").value = "sales";

@@ -48,6 +48,19 @@ def _months(to: str, count: int) -> list[str]:
     return out[::-1]
 
 
+def _bucket(rate) -> str | None:
+    """'21', '12' or '0' for a rate written any way ("21.00", "12.0"); None for any other rate.
+    Codex review, PR #33: compared as text, "21.00" fell into the 0 % row with its tax."""
+    try:
+        value = Decimal(str(rate))
+    except (ArithmeticError, ValueError):
+        return None
+    for key in RATES:
+        if value == Decimal(key):
+            return key
+    return None
+
+
 def _vat_from_gross(gross: Decimal, rate: str) -> Decimal:
     r = Decimal(rate)
     return (gross * r / (100 + r)).quantize(CENT, rounding=ROUND_HALF_UP) if r else Decimal('0')
@@ -104,7 +117,10 @@ def overview(db, org_id: str, to: str, count: int) -> dict:
             skipped['currency'] += 1
             continue
         for r in totals['rates']:
-            rate = r['rate'] if r['rate'] in RATES else '0'
+            rate = _bucket(r['rate'] or '0')
+            if rate is None:
+                bucket['sales_unknown'] += Decimal(r['base']) + Decimal(r['tax'])
+                continue
             bucket['sales'][rate]['base'] += Decimal(r['base'])
             bucket['sales'][rate]['tax'] += Decimal(r['tax'])
 
@@ -133,13 +149,13 @@ def overview(db, org_id: str, to: str, count: int) -> dict:
             continue
         deductible = payer and not fields.get('exempt') and not fields.get('reverse_charge')
         rates = received_amounts(fields, True)
-        if rates is None or any(rate is None for rate, _, _ in rates):
+        if rates is None or any(_bucket(rate) is None for rate, _, _ in rates):
             skipped['amounts'] += 1
             if fields.get('total'):
                 bucket['purchases_unknown'] += Decimal(fields['total'])
             continue
         for rate, base, tax in rates:
-            rate = rate if rate in RATES else '0'
+            rate = _bucket(rate)
             base, tax = Decimal(base), Decimal(tax or '0')
             if not deductible:  # VAT a company cannot deduct is part of the cost
                 base, tax = base + tax, Decimal('0')

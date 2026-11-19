@@ -712,10 +712,14 @@ const path = require("node:path");
       (await page.locator("#ov-capture-card").innerText()).includes("Chờ duyệt") &&
         (await page.locator("#ov-photo").isVisible()) && (await page.locator("#ov-archive").isVisible()),
     );
+    // Codex review, PR #33: a pending supplier payment must not travel with the register total.
+    await page.evaluate(() => { state.cashDoc = "doc-pending"; document.querySelector("#c-linked").hidden = false; });
     await page.locator("#ov-register").click();
+    await page.locator("#cash-view").waitFor();
     check(
-      "Register total opens the cash form as a counter sale with its VAT rate",
-      (await page.locator("#cash-view").isVisible()) &&
+      "Register total opens the cash form as a fresh counter sale with its VAT rate",
+      (await page.evaluate(() => state.cashDoc === null)) && !(await page.locator("#c-linked").isVisible()) &&
+        (await page.locator("#cash-view").isVisible()) &&
         (await page.locator("#c-kind").inputValue()) === "income" &&
         (await page.locator("#c-category").inputValue()) === "sales" &&
         (await page.locator("#c-vat-label").isVisible()),
