@@ -1,0 +1,36 @@
+/* News in the app (news.js): Czech law and notices for the owner's trade, as in the design. */
+.news { display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+.news-title { margin: 0; font-size: 26px; line-height: 1.15; }
+.news-note { margin: 0; color: #4a5e56; font-size: 14px; }
+.news-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.news-chip {
+  flex: none; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(24, 58, 50, 0.16);
+  background: #fffefa; color: #183a32; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.news-chip[aria-pressed="true"] { background: #183a32; border-color: #183a32; color: #f5f6ef; font-weight: 800; }
+.news-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.news-card {
+  background: #fffefa; border: 1px solid rgba(24, 58, 50, 0.12); border-radius: 20px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.news-card.featured { background: #183a32; color: #f5f6ef; border-color: #183a32; }
+.news-card.featured a { color: #dae9ad; }
+.news-card.featured .news-summary, .news-card.featured .news-sources, .news-card.featured .news-date { color: rgba(245, 246, 239, 0.86); }
+.news-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.news-tag { padding: 3px 10px; border-radius: 999px; background: #eef0e6; color: #33473f; font-weight: 700; }
+.news-tag.cat-law { background: #e3eed6; color: #1f4a2a; }
+.news-tag.cat-notice { background: #f7edc8; color: #5e4a0a; }
+.news-tag.mine { background: #dae9ad; color: #183a32; }
+.news-date { color: #4a5e56; }
+.news-head { margin: 0; font-size: 16px; line-height: 1.35; }
+.news-card.featured .news-head { font-size: 20px; }
+.news-summary { margin: 0; font-size: 14px; line-height: 1.55; color: #33473f; overflow-wrap: anywhere; }
+.news-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.news-sources, .news-official { margin: 0; font-size: 13px; color: #4a5e56; overflow-wrap: anywhere; }
+.news-official a { font-weight: 700; }
+.news-task {
+  min-height: 40px; padding: 0 14px; border-radius: 999px; border: 0; background: #dae9ad; color: #183a32;
+  font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.news-task:disabled { opacity: 0.75; cursor: default; }
+.news-empty { margin: 0; padding: 16px; border-radius: 16px; background: #fffefa; border: 1px dashed rgba(24, 58, 50, 0.25); color: #4a5e56; }

@@ -1301,7 +1301,7 @@ function renderDemoRoles() {
   $("demo-role-label").hidden = false;
 }
 function setTab(which) {
-  for (const name of ["home", "portfolio", "tasks", "docs", "overview", "cash", "bank", "staff", "invoices", "legal"]) {
+  for (const name of ["home", "portfolio", "tasks", "docs", "overview", "news", "cash", "bank", "staff", "invoices", "legal"]) {
     $(name + "-view").hidden = name !== which;
     $(name + "-tab").classList.toggle("active", name === which);
     $(name + "-tab").setAttribute("aria-pressed", String(name === which));
