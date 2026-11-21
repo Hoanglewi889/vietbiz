@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="range-calendar.css" />
     <link rel="stylesheet" href="empty-folder.css" />
     <link rel="stylesheet" href="overview.css" />
+    <link rel="stylesheet" href="news.css" />
     <script src="runtime.js" defer></script>
     <script src="i18n.js" defer></script>
     <script src="app.js" defer></script>
@@ -35,6 +36,7 @@
     <script src="pohoda-export.js" defer></script>
     <script src="eet-guide.js" defer></script>
     <script src="overview.js" defer></script>
+    <script src="news.js" defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -142,6 +144,7 @@
         ><button id="tasks-tab" class="tab active" data-i18n="tasks"></button
         ><button id="docs-tab" class="tab" data-i18n="documents"></button
         ><button id="overview-tab" class="tab" hidden data-i18n="overviewTab"></button
+        ><button id="news-tab" class="tab" data-i18n="newsTab"></button
         ><button id="cash-tab" class="tab" hidden data-i18n="cashbook"></button
         ><button id="bank-tab" class="tab" hidden data-i18n="bankTab"></button
         ><button id="staff-tab" class="tab" hidden data-i18n="staffTab"></button
@@ -333,6 +336,9 @@
           </div>
         </section>
         <div id="document-list" class="document-list"></div>
+      </section>
+      <section id="news-view" class="panel" hidden>
+        <div id="news-root" class="news" aria-live="polite"></div>
       </section>
       <section id="overview-view" class="panel" hidden>
         <div id="overview-root" class="ov" aria-live="polite"></div>
@@ -957,6 +963,7 @@
       <button id="phone-nav-home" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="phoneToday"></span></button
       ><button id="phone-nav-cash" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M7 16v-4M12 16V7M17 16v-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneCash"></span></button
       ><button id="phone-nav-capture" type="button" class="phone-nav-capture"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneCaptureShort"></span></button
+      ><button id="phone-nav-news" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h11v14H6a1 1 0 0 1-1-1zM16 9h3v9a1 1 0 0 1-1 1h-2M8 9h5M8 12.5h5M8 16h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="phoneNews"></span></button
       ><button id="phone-nav-invoices" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneInvoices"></span></button
       ><button id="phone-nav-staff" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6M15.5 6.5a3 3 0 0 1 0 5.6M17.5 14.8c1.6.6 2.6 2 3 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span data-i18n="phoneShifts"></span></button>
     </nav>

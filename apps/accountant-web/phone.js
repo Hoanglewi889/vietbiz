@@ -28,7 +28,7 @@ function phoneApply() {
   phoneMarkNav();
 }
 function phoneMarkNav() {
-  for (const [nav, view] of [["home", "home"], ["cash", "cash"], ["invoices", "invoices"], ["staff", "staff"]]) {
+  for (const [nav, view] of [["home", "home"], ["cash", "cash"], ["news", "news"], ["invoices", "invoices"], ["staff", "staff"]]) {
     const on = !$(view + "-view").hidden;
     $("phone-nav-" + nav).classList.toggle("active", on);
     if (on) $("phone-nav-" + nav).setAttribute("aria-current", "page");

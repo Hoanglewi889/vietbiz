@@ -41,8 +41,12 @@ SOURCES = {
 }
 MAX_EXTRA_SOURCES = 4
 COPY_RUN = 6  # words in a row taken from a source headline that make a draft a copy
+# 'notice' (owner request 19.11.2026): announcements for Vietnamese businesses — deadlines,
+# office changes — next to new law.
+CATEGORIES = ('general', 'business', 'law', 'notice', 'events')
 
 from .database import connection, require_schema
+from .filing_calendar import INDUSTRIES
 require_schema()
 
 def category_for(text: str) -> str:
@@ -106,16 +110,22 @@ class EditorialReview(BaseModel):
     reviewer_verified: bool
 
 @router.get('')
-def list_news(category:str|None=None,q:str|None=Query(None,max_length=120),limit:int=Query(20,ge=1,le=50)):
+def list_news(category:str|None=None,q:str|None=Query(None,max_length=120),limit:int=Query(20,ge=1,le=50),
+              industry:str|None=None):
+    """Published news; `industry` keeps items for that trade and items for every business."""
     filters=["review_status='published'"]
     args=[]
     if category:
         filters.append('category=?'); args.append(category)
+    if industry:
+        if industry not in INDUSTRIES: raise HTTPException(422,'Unknown industry')
+        filters.append("(industries IS NULL OR industries='' OR ','||industries||',' LIKE ?)"); args.append('%,'+industry+',%')
     if q:
         filters.append("(lower(vi_title) LIKE lower(?) ESCAPE '!' OR lower(vi_summary) LIKE lower(?) ESCAPE '!')")
         pattern = '%' + q.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
         args.extend([pattern, pattern])
-    sql='SELECT id,source_id,url,published_at,category,vi_title,vi_summary FROM news_items WHERE '+' AND '.join(filters)+' ORDER BY retrieved_at DESC LIMIT ?'
+    sql=('SELECT n.id,n.source_id,n.url,n.published_at,n.category,n.vi_title,n.vi_summary,n.industries,e.authority_url '
+         'FROM news_items n LEFT JOIN news_editorial e ON e.item_id=n.id WHERE '+' AND '.join(filters)+' ORDER BY n.retrieved_at DESC LIMIT ?')
     with connection() as db:
         items=db.execute(sql,(*args,limit)).fetchall()
         return _with_sources(db,[dict(item) for item in items])
@@ -136,12 +146,13 @@ def _with_sources(db, items: list[dict]) -> list[dict]:
                               [i['id'] for i in items]).fetchall():
             extra.setdefault(row['item_id'],[]).append(row['url'])
     for item in items:
+        item['industries']=[x for x in (item.get('industries') or '').split(',') if x]
         item['source_name']=SOURCES.get(item['source_id'],{}).get('name') or _source_name(item['url'])
         item['sources']=[{'name':item['source_name'],'url':item['url']}]+[{'name':_source_name(u),'url':u} for u in extra.get(item['id'],[])]
     return items
 
 @router.get('/categories')
-def categories():return ['general','business','law','events']
+def categories():return list(CATEGORIES)
 
 @router.get('/events')
 def public_events(city:str|None=None,limit:int=Query(20,ge=1,le=50)):
@@ -162,7 +173,8 @@ def public_sources():
 @router.get('/{item_id}')
 def news_detail(item_id:str):
     with connection() as db:
-        row=db.execute("SELECT id,source_id,url,published_at,category,vi_title,vi_summary FROM news_items WHERE id=? AND review_status='published'",(item_id,)).fetchone()
+        row=db.execute("SELECT n.id,n.source_id,n.url,n.published_at,n.category,n.vi_title,n.vi_summary,n.industries,e.authority_url "
+                       "FROM news_items n LEFT JOIN news_editorial e ON e.item_id=n.id WHERE n.id=? AND n.review_status='published'",(item_id,)).fetchone()
         if not row:raise HTTPException(404,'News item not published')
         return _with_sources(db,[dict(row)])[0]
 
@@ -199,7 +211,8 @@ def _source_links(urls) -> list[str]:
     return links
 
 def prepare_editorial_draft(item_id: str, translated_title: str, translated_summary: str, method: str='human', *,
-                            own_words: bool=False, extra_sources=(), editor: str='editor'):
+                            own_words: bool=False, extra_sources=(), editor: str='editor',
+                            category: str|None=None, industries=()):
     """Save a Vietnamese draft for review. A human editor declares `own_words` (written from the
     facts, not translated or pasted from the article); every draft is checked against the source
     headline and refused when it repeats it."""
@@ -210,6 +223,11 @@ def prepare_editorial_draft(item_id: str, translated_title: str, translated_summ
     if method=='human' and not own_words:
         raise ValueError('Write the news in your own words and confirm it (own_words)')
     links=_source_links(extra_sources)
+    if category is not None and category not in CATEGORIES:
+        raise ValueError('Unknown category')
+    trades=sorted(set(industries or ()))
+    if any(t not in INDUSTRIES for t in trades):
+        raise ValueError('Unknown industry')
     with connection() as db:
         item=db.execute('SELECT id,source_title,url FROM news_items WHERE id=?',(item_id,)).fetchone()
         if item is None: raise ValueError('Unknown article')
@@ -221,7 +239,9 @@ def prepare_editorial_draft(item_id: str, translated_title: str, translated_summ
           draft_vi_title=excluded.draft_vi_title, draft_vi_summary=excluded.draft_vi_summary,
           method=excluded.method,reviewer=NULL,reviewed_at=NULL,legal_status='not_checked',authority_url=NULL''',
           (item_id,translated_title.strip(),translated_summary.strip(),method))
-        db.execute("UPDATE news_items SET review_status='pending' WHERE id=?",(item_id,))
+        db.execute("UPDATE news_items SET review_status='pending', industries=? WHERE id=?",(','.join(trades) or None,item_id))
+        if category is not None:
+            db.execute('UPDATE news_items SET category=? WHERE id=?',(category,item_id))
         db.execute('DELETE FROM news_item_links WHERE item_id=?',(item_id,))
         for position,url in enumerate(links,1):
             db.execute('INSERT INTO news_item_links(item_id,position,url) VALUES (?,?,?)',(item_id,position,url))

@@ -24,7 +24,7 @@ const path = require("node:path");
   });
   const checks = [];
   const webDir = path.join(__dirname, "..", "apps", "accountant-web");
-  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "eet-guide.js", "overview.js", "login.js"].flatMap((file) =>
+  const globals = ["i18n.js", "app.js", "invoices.js", "legal.js", "portfolio.js", "suppliers.js", "filing.js", "goods.js", "bank.js", "cash-control.js", "staff.js", "quick-create.js", "doc-flag.js", "qty-stepper.js", "range-calendar.js", "empty-folder.js", "runtime.js", "data-export.js", "partner-check.js", "phone.js", "pohoda-export.js", "eet-guide.js", "overview.js", "news.js", "login.js"].flatMap((file) =>
     [...fs.readFileSync(path.join(webDir, file), "utf8").matchAll(/^(?:async )?function (\w+)|^(?:const|let) (\w+)/gm)]
       .map((m) => m[1] || m[2]),
   );
@@ -724,6 +724,60 @@ const path = require("node:path");
         (await page.locator("#c-category").inputValue()) === "sales" &&
         (await page.locator("#c-vat-label").isVisible()),
     );
+    // News in the app (21.11.2026): trade filters, official link, add to tasks. Synthetic items.
+    const newsQueries = [];
+    await page.route((url) => url.pathname === "/v1/news", (route) => {
+      const q = new URL(route.request().url()).searchParams;
+      newsQueries.push(q.toString());
+      const all = [
+        { id: "n-law", category: "law", industries: ["nails", "hair"], published_at: "2026-11-18T09:00:00",
+          vi_title: "Tiệm nail nhỏ có thể chọn EET OFF", vi_summary: "Thuế khoán mức 1, thu nhập đến 1 triệu Kč: trả thêm mỗi tháng thay vì ghi nhận EET (tin mẫu).",
+          url: "https://www.seznamzpravy.cz/zkouska-1", authority_url: "https://eet.gov.cz/", sources: [{ name: "Seznam Zprávy", url: "https://www.seznamzpravy.cz/zkouska-1" }] },
+        { id: "n-notice", category: "notice", industries: [], published_at: "2026-11-17T08:00:00",
+          vi_title: "Hạn nộp DPH tháng 10 là ngày 25/11", vi_summary: "Người nộp DPH theo tháng gửi tờ khai và tiền thuế trước ngày 25 (tin mẫu).",
+          url: "https://www.novinky.cz/zkouska-2", authority_url: null, sources: [{ name: "Novinky.cz", url: "https://www.novinky.cz/zkouska-2" }] },
+      ];
+      const items = all.filter((i) => (!q.get("category") || i.category === q.get("category")) &&
+        (!q.get("industry") || !i.industries.length || i.industries.includes(q.get("industry"))));
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify(items) });
+    });
+    await page.locator("#news-tab").click();
+    await page.locator("#news-root .news-chip").first().waitFor();
+    await page.locator('#news-root .news-chip[data-filter="all"]').click();
+    await page.waitForFunction(() => document.querySelectorAll("#news-root .news-card").length === 2);
+    const newsLinks = await page.$$eval("#news-root .news-card a", (links) =>
+      links.every((a) => a.href.startsWith("https://") && a.rel.includes("noopener") && a.target === "_blank"));
+    check(
+      "News lists law and notices with trade tags, sources and the official link",
+      (await page.locator("#news-root .news-card").count()) === 2 &&
+        (await page.locator("#news-root .news-card.featured .news-official").innerText()).includes("Văn bản chính thức") &&
+        (await page.locator('#news-root .news-card[data-id="n-law"] .news-tags').innerText()).includes("Nail") &&
+        (await page.locator('#news-root .news-card[data-id="n-notice"] .news-tags').innerText()).includes("Mọi ngành") &&
+        newsLinks,
+    );
+    await page.locator('#news-root .news-chip[data-filter="notice"]').click();
+    await page.waitForFunction(() => document.querySelectorAll("#news-root .news-card").length === 1);
+    await page.locator('#news-root .news-chip[data-filter="nails"]').click();
+    await page.waitForFunction(() => document.querySelector('#news-root .news-chip[data-filter="nails"]').getAttribute("aria-pressed") === "true");
+    check(
+      "News filters ask the API by category and by trade",
+      newsQueries.some((q) => q.includes("category=notice")) && newsQueries.some((q) => q.includes("industry=nails")),
+    );
+    await page.locator('#news-root .news-card[data-id="n-law"] .news-task').click();
+    await page.waitForFunction(() => document.querySelector('#news-root .news-card[data-id="n-law"] .news-task').disabled);
+    const newsTask = await page.evaluate(async () =>
+      (await request("/v1/organizations/" + state.org + "/tasks?limit=100")).items.some((t) => t.title === "Tiệm nail nhỏ có thể chọn EET OFF"));
+    check("A law item can be added to the company's tasks", newsTask);
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(
+      "News fits a 390 px screen",
+      await page.evaluate(() => [...document.querySelectorAll("#news-view .news-card, #news-view .news-task")]
+        .every((el) => el.getBoundingClientRect().right <= innerWidth + 1)),
+    );
+    if (process.env.VIETBIZ_SCREENSHOT_DIR)
+      await page.screenshot({ path: path.join(process.env.VIETBIZ_SCREENSHOT_DIR, "news-mobile.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.unroute((url) => url.pathname === "/v1/news");
     // Issued invoices (CR-5): seller profile, draft, issue, print, ISDOC.
     await page.locator("#invoices-tab").click();
     await page.locator("#invoice-list .empty").waitFor();

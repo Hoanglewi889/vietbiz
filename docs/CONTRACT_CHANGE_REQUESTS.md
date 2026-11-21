@@ -643,3 +643,19 @@ Counts only; no document data leaves its company. No schema change.
   contributions 33,8 %; all adjustable, computed in the browser), capture card (photo of a supplier
   invoice, the day's register total with its VAT rate, the document archive with review counts).
   Cash form: VAT rate select for income. Phone home: "Xem tổng quan, DPH và kế hoạch 2027".
+
+## CR-27 · News in the app, by trade (law, notices, grocery, bistro, nails, hair)
+
+- Requested by: the owner, 19.–21.11.2026 ("tin tức Séc, liên quan đến cộng đồng người Việt,
+  thông báo, luật áp dụng cho cửa hàng potraviny, quán ăn, nail, cắt tóc"; "và về phần tin tức
+  như nào") · Implemented in: `claude/news-in-app` · Status: proposed in PR · Depends on: #33.
+- Alembic `0017_news_industries`: `news_items.industries` (comma list of client-profile industries,
+  NULL = every business). Category `notice` added (`/v1/news/categories`).
+- Editorial (offline CLI, unchanged rules: own words, sources, reviewer sign-off, law needs an
+  official link): `news_pipeline.py draft … --category law|notice|… --industry grocery --industry bistro`.
+- `GET /v1/news?industry=` keeps items for that trade and items for every business; items now carry
+  `industries` and `authority_url` (also on `/v1/news/{id}`). Unknown industry → 422.
+- Web and app: tab "Tin tức / Zprávy" and phone bar item. Filters: for your shop (industry from the
+  client profile), all, new law, notices, grocery, bistro, nails, hair. Cards: category and trade
+  tags, date, Vietnamese title and summary, sources, official text link; law and notices can be added
+  to the company's tasks. Public news page labels `notice`.
